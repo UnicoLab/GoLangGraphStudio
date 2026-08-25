@@ -167,18 +167,20 @@ src/
 The interface is designed to work with the GoLangGraph Server API:
 
 ### Endpoints Used
-- `GET /health` - Server health check
-- `GET /agents` - List available agents
-- `GET /agents/{id}` - Get agent details
-- `POST /api/{id}` - Execute agent
-- `POST /api/{id}/stream` - Stream execution events
-- `GET /api/{id}/conversation` - Get conversation history
+- `GET /api/v1/health` - Server health check
+- `GET /api/v1/agents` - List available agents
+- `GET /api/v1/agents/{id}` - Get agent details
+- `POST /api/v1/agents/{id}/execute` - Execute an agent
+- `GET /api/v1/agents/{id}/history` - Get execution history
+- `GET /api/v1/tools` - List available tools
+- `GET /api/v1/providers` - List LLM providers
+- `WS /api/v1/ws/agents/{id}/stream` - Stream execution events (WebSocket)
 
 ### Authentication
 
-For production deployments, the interface supports:
-- **API Key**: For authenticated requests
-- **Custom Authentication**: Configurable auth headers
+The interface authenticates requests by sending the configured API key in the
+`X-API-Key` header. If no key is configured, requests are sent without it
+(the server accepts unauthenticated requests in development mode).
 
 ### GoLangGraph Agent Types
 
