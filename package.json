@@ -1,7 +1,8 @@
 {
-  "name": "langgraph-studio-interface",
+  "name": "golanggraph-studio",
   "version": "0.1.0",
   "private": true,
+  "description": "A modern visual console for debugging and testing GoLangGraph agents",
   "dependencies": {
     "@types/node": "^16.18.0",
     "@types/react": "^18.0.0",

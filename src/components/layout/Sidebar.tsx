@@ -30,7 +30,7 @@ export const Sidebar: React.FC = () => {
 
         <button
           onClick={createThread}
-          className="w-full flex items-center justify-center px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+          className="w-full flex items-center justify-center px-4 py-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white text-sm font-medium shadow-md shadow-blue-600/20 transition-all hover:-translate-y-0.5"
         >
           <PlusIcon className="w-4 h-4 mr-2" />
           New Thread

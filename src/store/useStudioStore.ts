@@ -152,7 +152,7 @@ export const useStudioStore = create<StudioStore>()(
   devtools(
     (set, get) => ({
       // connection
-      config: { apiUrl: 'http://localhost:8080' },
+      config: { apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8080' },
       connectionStatus: 'disconnected',
       isConnected: false,
       isConnecting: false,
