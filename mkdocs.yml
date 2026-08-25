@@ -1,11 +1,11 @@
 site_name: GoLangGraph Studio
 site_description: A fully functional React interface for debugging and testing GoLangGraph agents
 site_author: GoLangGraph Team
-site_url: https://piotrlaczkowski.github.io/GoLangGraph-Project/
+site_url: https://unicolab.github.io/GoLangGraphStudio/
 
-repo_name: piotrlaczkowski/GoLangGraph-Project
-repo_url: https://github.com/piotrlaczkowski/GoLangGraph-Project
-edit_uri: edit/main/GoLangGraphStudio/docs/
+repo_name: UnicoLab/GoLangGraphStudio
+repo_url: https://github.com/UnicoLab/GoLangGraphStudio
+edit_uri: edit/main/docs/
 
 copyright: Copyright &copy; 2024 GoLangGraph Studio
 
@@ -91,8 +91,8 @@ markdown_extensions:
   - pymdownx.keys
   - pymdownx.magiclink:
       repo_url_shorthand: true
-      user: piotrlaczkowski
-      repo: GoLangGraph-Project
+      user: UnicoLab
+      repo: GoLangGraphStudio
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.superfences:
@@ -111,9 +111,9 @@ extra:
     provider: mike
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/piotrlaczkowski/GoLangGraph-Project
+      link: https://github.com/UnicoLab/GoLangGraphStudio
     - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/r/piotrlaczkowski/golanggraph-studio
+      link: https://hub.docker.com/r/unicolab/golanggraph-studio
   analytics:
     provider: google
     property: G-XXXXXXXXXX

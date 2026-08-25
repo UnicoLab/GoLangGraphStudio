@@ -167,12 +167,12 @@ src/
 The interface is designed to work with the GoLangGraph Server API:
 
 ### Endpoints Used
-- `GET /api/v1/health` - Server health check
-- `GET /api/v1/agents` - List available agents
-- `GET /api/v1/agents/{id}` - Get agent details
-- `GET /api/v1/graphs/{id}/topology` - Get graph topology
-- `POST /api/v1/agents/{id}/execute` - Execute agent
-- `WebSocket /api/v1/ws/agents/{id}/stream` - Stream execution events
+- `GET /health` - Server health check
+- `GET /agents` - List available agents
+- `GET /agents/{id}` - Get agent details
+- `POST /api/{id}` - Execute agent
+- `POST /api/{id}/stream` - Stream execution events
+- `GET /api/{id}/conversation` - Get conversation history
 
 ### Authentication
 
@@ -252,10 +252,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📚 Related Links
 
-- [GoLangGraph Documentation](https://github.com/piotrlaczkowski/GoLangGraph)
-- [GoLangGraph GitHub Repository](https://github.com/piotrlaczkowski/GoLangGraph)
+- [GoLangGraph Documentation](https://github.com/UnicoLab/GoLangGraph)
+- [GoLangGraph GitHub Repository](https://github.com/UnicoLab/GoLangGraph)
 - [Original LangGraph Studio](https://langchain-ai.github.io/langgraph/cloud/how-tos/studio/quick_start/)
 - [React Flow Documentation](https://reactflow.dev/)
+
+## 🔄 Repository Migration
+
+This repository has been migrated from `piotrlaczkowski/GoLangGraphStudio` to [`UnicoLab/GoLangGraphStudio`](https://github.com/UnicoLab/GoLangGraphStudio). GitHub automatically redirects the old URL, so existing clones, links, and references keep working. The legacy remote is retained as `piotrlaczkowski` for backward compatibility.
 
 ---
 

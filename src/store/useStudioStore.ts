@@ -5,13 +5,13 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { useEffect, useRef } from 'react';
 import React from 'react';
-import { 
-  StudioState, 
-  Thread, 
+import {
+  StudioState,
+  Thread,
   Agent,
-  Assistant, 
-  Run, 
-  Message, 
+  Assistant,
+  Run,
+  Message,
   ViewMode,
   GraphState,
   GoLangGraphConfig,
@@ -19,7 +19,10 @@ import {
   GraphEdge,
   ExecutionContext,
   ExecutionLog,
-  GraphExecutionState
+  GraphExecutionState,
+  DeepAgent,
+  InterruptEvent,
+  SubAgentResult
 } from '../types';
 
 // Automatic layout algorithm for better graph visualization
@@ -29,12 +32,12 @@ const applyAutoLayout = (nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] =>
   // Create adjacency lists for graph traversal
   const outgoing = new Map<string, string[]>();
   const incoming = new Map<string, string[]>();
-  
+
   nodes.forEach(node => {
     outgoing.set(node.id, []);
     incoming.set(node.id, []);
   });
-  
+
   edges.forEach(edge => {
     outgoing.get(edge.source)?.push(edge.target);
     incoming.get(edge.target)?.push(edge.source);
@@ -51,7 +54,7 @@ const applyAutoLayout = (nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] =>
 
   // BFS to assign layers
   const queue: Array<{ nodeId: string; layer: number }> = [];
-  
+
   // Start with nodes that have no incoming edges
   startNodes.forEach(node => {
     queue.push({ nodeId: node.id, layer: 0 });
@@ -64,18 +67,18 @@ const applyAutoLayout = (nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] =>
 
   while (queue.length > 0) {
     const { nodeId, layer } = queue.shift()!;
-    
+
     if (visited.has(nodeId)) continue;
     visited.add(nodeId);
-    
+
     // Ensure we have enough layers
     while (layers.length <= layer) {
       layers.push([]);
     }
-    
+
     layers[layer].push(nodeId);
     nodeToLayer.set(nodeId, layer);
-    
+
     // Add children to next layer
     const children = outgoing.get(nodeId) || [];
     children.forEach(childId => {
@@ -109,11 +112,11 @@ const applyAutoLayout = (nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] =>
     const layer = nodeToLayer.get(node.id) || 0;
     const layerNodes = layers[layer] || [];
     const indexInLayer = layerNodes.indexOf(node.id);
-    
+
     // Center the layer vertically
     const layerHeight = layerNodes.length * nodeHeight + (layerNodes.length - 1) * verticalSpacing;
     const layerStartY = startY - layerHeight / 2 + (layerNodes.length > 1 ? 0 : layerHeight / 2);
-    
+
     const x = startX + layer * horizontalSpacing;
     const y = layerStartY + indexInLayer * (nodeHeight + verticalSpacing);
 
@@ -127,7 +130,7 @@ const applyAutoLayout = (nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] =>
 };
 
 // Live Update Event System
-type LiveUpdateEvent = 
+type LiveUpdateEvent =
   | { type: 'EXECUTION_STARTED'; data: { threadId: string; assistantId: string; initialState: any } }
   | { type: 'EXECUTION_STEP'; data: { nodeId: string; nodeName: string; progress: number } }
   | { type: 'EXECUTION_LOG'; data: ExecutionLog }
@@ -135,9 +138,12 @@ type LiveUpdateEvent =
   | { type: 'EXECUTION_STOPPED'; data: { threadId: string; reason: string } }
   | { type: 'MESSAGE_ADDED'; data: { threadId: string; message: Message } }
   | { type: 'THREAD_UPDATED'; data: { threadId: string; updates: Partial<Thread> } }
-      | { type: 'GRAPH_STATE_CHANGED'; data: GraphState }
+  | { type: 'GRAPH_STATE_CHANGED'; data: GraphState }
   | { type: 'NODE_FOCUSED'; data: { nodeId: string } }
-  | { type: 'STREAMING_UPDATE'; data: { messageId: string; content: string; isComplete: boolean } };
+  | { type: 'STREAMING_UPDATE'; data: { messageId: string; content: string; isComplete: boolean } }
+  | { type: 'INTERRUPT_RECEIVED'; data: InterruptEvent }
+  | { type: 'INTERRUPT_RESOLVED'; data: { interruptId: string; resolution: 'approved' | 'rejected' } }
+  | { type: 'SUB_AGENT_COMPLETED'; data: SubAgentResult };
 
 class LiveUpdateManager {
   private listeners: Map<string, Set<(event: LiveUpdateEvent) => void>> = new Map();
@@ -206,18 +212,18 @@ export const liveUpdateManager = new LiveUpdateManager();
 // Helper function to generate contextual responses based on execution
 const generateExecutionResponse = (inputMessage: string, logs: ExecutionLog[]): string => {
   // First priority: Look for intermediate_results in logs (matching user's example format)
-  const intermediateResultsLogs = logs.filter(log => 
+  const intermediateResultsLogs = logs.filter(log =>
     log.data?.intermediate_results
   );
-  
+
   for (const log of intermediateResultsLogs.reverse()) {
     const results = log.data.intermediate_results;
-    
+
     // Look for respond node specifically (as shown in user's example)
     if (results.respond && results.respond.response) {
       return results.respond.response;
     }
-    
+
     // Look for any node with response - extract just the response field
     for (const [nodeId, result] of Object.entries(results)) {
       if (result && typeof result === 'object') {
@@ -228,22 +234,22 @@ const generateExecutionResponse = (inputMessage: string, logs: ExecutionLog[]): 
       }
     }
   }
-  
+
   // Second priority: Look for actual agent responses in the logs data output
-  const responseLogs = logs.filter(log => 
+  const responseLogs = logs.filter(log =>
     log.type === 'output' && log.data?.output
   );
-  
+
   for (const log of responseLogs.reverse()) {
     const output = log.data.output;
-    
+
     // Handle structured agent responses (Go map format)
     if (output && typeof output === 'object') {
       // Extract response field from structured output
       if (output.response && typeof output.response === 'string' && output.response.trim().length > 0) {
         return output.response;
       }
-      
+
       // Fallback to other text fields
       const textFields = ['result', 'content', 'text', 'message', 'answer'];
       for (const field of textFields) {
@@ -252,30 +258,30 @@ const generateExecutionResponse = (inputMessage: string, logs: ExecutionLog[]): 
         }
       }
     }
-    
+
     // Handle string responses
     if (typeof output === 'string' && output.trim().length > 0) {
       return output;
     }
   }
-  
+
   // Third priority: Look for final_response in the execution state
-  const finalResponseLogs = logs.filter(log => 
-    log.data?.final_response && 
+  const finalResponseLogs = logs.filter(log =>
+    log.data?.final_response &&
     typeof log.data.final_response === 'string' &&
     log.data.final_response.trim().length > 0
   );
-  
+
   if (finalResponseLogs.length > 0) {
     const latestFinalResponse = finalResponseLogs[finalResponseLogs.length - 1];
     return latestFinalResponse.data.final_response;
   }
-  
+
   // Fourth priority: Look for responses in state_updates intermediate results
-  const stateUpdateLogs = logs.filter(log => 
+  const stateUpdateLogs = logs.filter(log =>
     log.data?.state_updates?.intermediate_results
   );
-  
+
   for (const log of stateUpdateLogs.reverse()) {
     const results = log.data.state_updates.intermediate_results;
     for (const [nodeId, result] of Object.entries(results)) {
@@ -287,17 +293,17 @@ const generateExecutionResponse = (inputMessage: string, logs: ExecutionLog[]): 
       }
     }
   }
-  
+
   // Fifth priority: Look for any generation or response nodes
-  const generationLogs = logs.filter(log => 
-    (log.nodeId.includes('respond') || 
-     log.nodeId.includes('generation') || 
-     log.nodeName.toLowerCase().includes('respond') ||
-     log.nodeName.toLowerCase().includes('generation')) &&
+  const generationLogs = logs.filter(log =>
+    (log.nodeId.includes('respond') ||
+      log.nodeId.includes('generation') ||
+      log.nodeName.toLowerCase().includes('respond') ||
+      log.nodeName.toLowerCase().includes('generation')) &&
     log.type === 'output' &&
     log.data?.output
   );
-  
+
   for (const log of generationLogs.reverse()) {
     const output = log.data.output;
     if (output.response && typeof output.response === 'string' && output.response.trim().length > 0) {
@@ -310,43 +316,43 @@ const generateExecutionResponse = (inputMessage: string, logs: ExecutionLog[]): 
       return output.content;
     }
   }
-  
+
   // Sixth priority: Look for any meaningful text output in recent logs
-  const meaningfulLogs = logs.filter(log => 
-    log.type === 'output' && 
-    log.data?.output && 
+  const meaningfulLogs = logs.filter(log =>
+    log.type === 'output' &&
+    log.data?.output &&
     typeof log.data.output === 'object'
   ).slice(-5); // Get last 5 meaningful logs
-  
+
   for (const log of meaningfulLogs.reverse()) {
     const output = log.data.output;
-    
+
     // Check various possible response fields
     const possibleResponses = [
       output.response,
-      output.result, 
+      output.result,
       output.content,
       output.text,
       output.message,
       output.answer,
       output.clarification_request
     ];
-    
+
     for (const response of possibleResponses) {
       if (response && typeof response === 'string' && response.trim().length > 20) {
         return response;
       }
     }
   }
-  
+
   // Last resort: Generate a contextual response based on execution path
   const executedNodes = new Set(logs.map(log => log.nodeId));
   const extractedMessage = logs.find(log => log.data?.userMessage)?.data.userMessage || inputMessage || 'your request';
-  
+
   if (executedNodes.has('respond_to_greeting') || Array.from(executedNodes).some(id => id.includes('greeting'))) {
     return `Hello! I'm here to help you with any questions or research you need. What would you like to know about?`;
   }
-  
+
   return `I've processed your request: "${extractedMessage}". The system completed execution successfully with ${executedNodes.size} nodes.`;
 };
 
@@ -361,59 +367,59 @@ interface StudioStore extends StudioState {
   setIsConnected: (connected: boolean) => void;
   setIsLoading: (loading: boolean) => void;
   setError: (error: string | undefined) => void;
-  
+
   // UI State
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
   darkMode: boolean;
   setDarkMode: (darkMode: boolean) => void;
-  
+
   // Streaming
   isStreaming: boolean;
   setIsStreaming: (streaming: boolean) => void;
   streamingMessage: string;
   setStreamingMessage: (message: string) => void;
-  
+
   // Connection & Retry Logic
   connectionStatus: 'connected' | 'disconnected' | 'reconnecting' | 'failed';
   setConnectionStatus: (status: 'connected' | 'disconnected' | 'reconnecting' | 'failed') => void;
   retryAttempts: number;
   maxRetryAttempts: number;
   attemptReconnection: () => Promise<void>;
-  
+
   // Thread management
   threads: Thread[];
   addThread: (thread: Thread) => void;
   updateThread: (threadId: string, updates: Partial<Thread>) => void;
   deleteThread: (threadId: string) => void;
   addMessageToThread: (threadId: string, message: Message) => void;
-  
+
   // Agent management (GoLangGraph)
   agents: Assistant[];
   addAgent: (agent: Assistant) => void;
   updateAgent: (agentId: string, updates: Partial<Assistant>) => void;
   deleteAgent: (agentId: string) => void;
   clearAgents: () => void;
-  
+
   // Assistant management (backward compatibility)
   assistants: Assistant[];
   addAssistant: (assistant: Assistant) => void;
   updateAssistant: (assistantId: string, updates: Partial<Assistant>) => void;
   deleteAssistant: (assistantId: string) => void;
   clearAssistants: () => void;
-  
+
   // Run management
   runs: any[];
   addRun: (run: any) => void;
   updateRun: (runId: string, updates: Partial<any>) => void;
-  
+
   // Configuration
   config: GoLangGraphConfig;
   setConfig: (config: GoLangGraphConfig) => void;
-  
+
   // Graph data fetching
   fetchGraphData: (agentId: string) => Promise<void>;
-  
+
   // Graph Execution Context - now supports multiple contexts per thread/agent
   executionContext: ExecutionContext;
   executionContexts: Map<string, ExecutionContext>; // Key: threadId-agentId
@@ -431,26 +437,35 @@ interface StudioStore extends StudioState {
   addBreakpoint: (nodeId: string, condition?: string) => void;
   removeBreakpoint: (nodeId: string) => void;
   toggleBreakpoint: (nodeId: string) => void;
-  
+
   // Graph view controls
   focusOnNode: (nodeId: string) => void;
   fitGraphToView: () => void;
-  
+
   // Live Update System
   liveUpdateManager: LiveUpdateManager;
   subscribeLiveUpdates: (eventType: LiveUpdateEvent['type'], callback: (event: LiveUpdateEvent) => void) => () => void;
   subscribeAllLiveUpdates: (callback: (event: LiveUpdateEvent) => void) => () => void;
   emitLiveUpdate: (event: LiveUpdateEvent) => void;
-  
+
   // Enhanced methods with live updates
   addMessageToThreadLive: (threadId: string, message: Message) => void;
   updateThreadLive: (threadId: string, updates: Partial<Thread>) => void;
   setGraphStateLive: (state: Graph) => void;
   focusOnNodeLive: (nodeId: string) => void;
-  
+
   // Global execution system
   startGlobalExecution: (source: 'chat' | 'graph', initialState?: ExecutionState, userMessage?: string) => void;
-  
+
+  // Deep Agent state
+  activeInterrupts: InterruptEvent[];
+  subAgentResults: SubAgentResult[];
+  addInterrupt: (interrupt: InterruptEvent) => void;
+  resolveInterrupt: (interruptId: string, resolution: 'approved' | 'rejected') => void;
+  clearInterrupts: () => void;
+  addSubAgentResult: (result: SubAgentResult) => void;
+  clearSubAgentResults: () => void;
+
   // Reset
   reset: () => void;
 }
@@ -484,6 +499,10 @@ export const useStudioStore = create<StudioStore>()(
         agentId: undefined,
         apiKey: undefined,
       },
+
+      // Deep Agent state
+      activeInterrupts: [],
+      subAgentResults: [],
 
       // Actions
       setCurrentView: (view) => set({ currentView: view }),
@@ -544,30 +563,30 @@ export const useStudioStore = create<StudioStore>()(
       maxRetryAttempts: 3,
       attemptReconnection: async () => {
         const state = get();
-        
+
         if (state.retryAttempts >= state.maxRetryAttempts) {
           set({ connectionStatus: 'failed' });
           return;
         }
-        
-        set({ 
+
+        set({
           connectionStatus: 'reconnecting',
-          retryAttempts: state.retryAttempts + 1 
+          retryAttempts: state.retryAttempts + 1
         });
-        
+
         try {
           // Test connection by trying to fetch a simple endpoint
           // Try multiple endpoints to find one that works
           const testEndpoints = [
             '/health',
-            '/status', 
+            '/status',
             '/assistants',
             '/'
           ];
-          
+
           let connected = false;
           let lastError = null;
-          
+
           for (const endpoint of testEndpoints) {
             try {
               console.log(`🔍 Testing connectivity with endpoint: ${endpoint}`);
@@ -578,7 +597,7 @@ export const useStudioStore = create<StudioStore>()(
                   ...(state.config.apiKey && { 'Authorization': `Bearer ${state.config.apiKey}` })
                 },
               });
-              
+
               // Accept any response that's not a network error
               // Even 404 or 405 means the server is responding
               if (response.status < 500) {
@@ -592,15 +611,15 @@ export const useStudioStore = create<StudioStore>()(
               continue;
             }
           }
-          
+
           if (connected) {
-            set({ 
+            set({
               connectionStatus: 'connected',
               isConnected: true,
               retryAttempts: 0,
               error: undefined
             });
-            
+
             // Emit live update for successful reconnection
             liveUpdateManager.emit({
               type: 'GRAPH_STATE_CHANGED',
@@ -611,9 +630,9 @@ export const useStudioStore = create<StudioStore>()(
           }
         } catch (error) {
           console.error(`Reconnection attempt ${state.retryAttempts} failed:`, error);
-          
+
           if (state.retryAttempts >= state.maxRetryAttempts) {
-            set({ 
+            set({
               connectionStatus: 'failed',
               isConnected: false,
               error: `Failed to reconnect after ${state.maxRetryAttempts} attempts`
@@ -631,30 +650,30 @@ export const useStudioStore = create<StudioStore>()(
       },
 
       // Thread management
-      addThread: (thread) => 
+      addThread: (thread) =>
         set((state) => ({ threads: [...state.threads, thread] })),
-      
+
       updateThread: (threadId, updates) =>
         set((state) => {
           const updatedThreads = state.threads.map((thread) =>
             thread.id === threadId ? { ...thread, ...updates } : thread
           );
-          
+
           // Emit live update
           liveUpdateManager.emit({
             type: 'THREAD_UPDATED',
             data: { threadId, updates }
           });
-          
+
           return { threads: updatedThreads };
         }),
-      
+
       deleteThread: (threadId) =>
         set((state) => ({
           threads: state.threads.filter((thread) => thread.id !== threadId),
           selectedThread: state.selectedThread?.id === threadId ? undefined : state.selectedThread,
         })),
-      
+
       addMessageToThread: (threadId, message) =>
         set((state) => {
           const updatedThreads = state.threads.map((thread) =>
@@ -662,18 +681,18 @@ export const useStudioStore = create<StudioStore>()(
               ? { ...thread, messages: [...thread.messages, message], updatedAt: new Date() }
               : thread
           );
-          
+
           // Also update selectedThread if it matches the threadId
           const updatedSelectedThread = state.selectedThread?.id === threadId
             ? { ...state.selectedThread, messages: [...state.selectedThread.messages, message], updatedAt: new Date() }
             : state.selectedThread;
-          
+
           // Emit live update
           liveUpdateManager.emit({
             type: 'MESSAGE_ADDED',
             data: { threadId, message }
           });
-          
+
           return {
             threads: updatedThreads,
             selectedThread: updatedSelectedThread
@@ -682,11 +701,11 @@ export const useStudioStore = create<StudioStore>()(
 
       // Agent management (GoLangGraph)
       addAgent: (agent) =>
-        set((state) => ({ 
+        set((state) => ({
           agents: [...state.agents, agent],
           assistants: [...state.assistants, { ...agent, config: {}, graph_id: agent.graph?.id || '' }]
         })),
-      
+
       updateAgent: (agentId, updates) =>
         set((state) => ({
           agents: state.agents.map((agent) =>
@@ -696,7 +715,7 @@ export const useStudioStore = create<StudioStore>()(
             assistant.id === agentId ? { ...assistant, ...updates, config: {}, graph_id: assistant.graph_id } : assistant
           ),
         })),
-      
+
       deleteAgent: (agentId) =>
         set((state) => ({
           agents: state.agents.filter((agent) => agent.id !== agentId),
@@ -705,20 +724,20 @@ export const useStudioStore = create<StudioStore>()(
           selectedAssistant: state.selectedAssistant?.id === agentId ? undefined : state.selectedAssistant,
         })),
 
-      clearAgents: () => set({ 
-        agents: [], 
-        assistants: [], 
-        selectedAgent: undefined, 
-        selectedAssistant: undefined 
+      clearAgents: () => set({
+        agents: [],
+        assistants: [],
+        selectedAgent: undefined,
+        selectedAssistant: undefined
       }),
 
       // Assistant management (backward compatibility)
       addAssistant: (assistant) =>
-        set((state) => ({ 
+        set((state) => ({
           assistants: [...state.assistants, assistant],
           agents: [...state.agents, { ...assistant, type: 'chat', model: '', provider: '', temperature: 0.7, maxTokens: 1000, maxIterations: 10, tools: [], enableStreaming: false, timeout: 30000 }]
         })),
-      
+
       updateAssistant: (assistantId, updates) =>
         set((state) => ({
           assistants: state.assistants.map((assistant) =>
@@ -728,7 +747,7 @@ export const useStudioStore = create<StudioStore>()(
             agent.id === assistantId ? { ...agent, ...updates } : agent
           ),
         })),
-      
+
       deleteAssistant: (assistantId) =>
         set((state) => ({
           assistants: state.assistants.filter((assistant) => assistant.id !== assistantId),
@@ -737,17 +756,17 @@ export const useStudioStore = create<StudioStore>()(
           selectedAgent: state.selectedAgent?.id === assistantId ? undefined : state.selectedAgent,
         })),
 
-      clearAssistants: () => set({ 
-        assistants: [], 
-        agents: [], 
-        selectedAssistant: undefined, 
-        selectedAgent: undefined 
+      clearAssistants: () => set({
+        assistants: [],
+        agents: [],
+        selectedAssistant: undefined,
+        selectedAgent: undefined
       }),
 
       // Run management
       addRun: (run) =>
         set((state) => ({ runs: [...state.runs, run] })),
-      
+
       updateRun: (runId, updates) =>
         set((state) => ({
           runs: state.runs.map((run) =>
@@ -762,7 +781,7 @@ export const useStudioStore = create<StudioStore>()(
       fetchGraphData: async (agentId: string) => {
         const state = get();
         const { config } = state;
-        
+
         try {
           set({ isLoading: true, error: undefined });
 
@@ -824,17 +843,17 @@ export const useStudioStore = create<StudioStore>()(
           if (agentData && agentData.metadata) {
             const nodes: GraphNode[] = [];
             const edges: GraphEdge[] = [];
-            
+
             // Build graph based on agent type and metadata
             const agentId = agentData.id;
             const metadata = agentData.metadata;
-            
+
             console.log(`🏗️ Building graph for agent: ${agentId}`);
-            
+
             if (agentId === 'interviewer') {
               // Build interviewer workflow graph based on the actual GoLangGraph structure
               const conversationPhases = metadata.output_schema?.properties?.conversation_phase?.enum || [];
-              
+
               nodes.push({
                 id: '__start__',
                 type: 'start',
@@ -846,7 +865,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 100, y: 200 },
               });
-              
+
               nodes.push({
                 id: 'process',
                 type: 'processing',
@@ -858,7 +877,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 300, y: 200 },
               });
-              
+
               nodes.push({
                 id: 'summarize',
                 type: 'validation',
@@ -870,7 +889,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 500, y: 300 },
               });
-              
+
               nodes.push({
                 id: '__end__',
                 type: 'end',
@@ -882,7 +901,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 700, y: 200 },
               });
-              
+
               // Create edges based on the actual workflow
               edges.push({
                 id: 'e1',
@@ -891,7 +910,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Begin' },
               });
-              
+
               edges.push({
                 id: 'e2',
                 source: 'process',
@@ -899,7 +918,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Continue Interview' },
               });
-              
+
               edges.push({
                 id: 'e3',
                 source: 'process',
@@ -907,7 +926,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'conditional',
                 data: { label: 'should_summarize = true' },
               });
-              
+
               edges.push({
                 id: 'e4',
                 source: 'summarize',
@@ -915,11 +934,11 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Summary Complete' },
               });
-              
+
             } else if (agentId === 'designer') {
               // Build designer workflow graph
               const styles = metadata.output_schema?.properties?.style?.enum || [];
-              
+
               nodes.push({
                 id: '__start__',
                 type: 'start',
@@ -931,7 +950,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 100, y: 200 },
               });
-              
+
               nodes.push({
                 id: 'analyze_request',
                 type: 'processing',
@@ -943,7 +962,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 300, y: 200 },
               });
-              
+
               nodes.push({
                 id: 'generate_design',
                 type: 'generation',
@@ -955,7 +974,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 500, y: 200 },
               });
-              
+
               nodes.push({
                 id: '__end__',
                 type: 'end',
@@ -967,7 +986,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 700, y: 200 },
               });
-              
+
               edges.push({
                 id: 'e1',
                 source: '__start__',
@@ -975,7 +994,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Begin' },
               });
-              
+
               edges.push({
                 id: 'e2',
                 source: 'analyze_request',
@@ -983,7 +1002,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Requirements Ready' },
               });
-              
+
               edges.push({
                 id: 'e3',
                 source: 'generate_design',
@@ -991,7 +1010,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Design Complete' },
               });
-              
+
             } else if (agentId === 'highlighter') {
               // Build highlighter workflow graph
               nodes.push({
@@ -1005,7 +1024,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 100, y: 200 },
               });
-              
+
               nodes.push({
                 id: 'analyze_conversation',
                 type: 'processing',
@@ -1017,7 +1036,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 300, y: 200 },
               });
-              
+
               nodes.push({
                 id: 'extract_insights',
                 type: 'generation',
@@ -1029,7 +1048,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 500, y: 200 },
               });
-              
+
               nodes.push({
                 id: '__end__',
                 type: 'end',
@@ -1041,7 +1060,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 700, y: 200 },
               });
-              
+
               edges.push({
                 id: 'e1',
                 source: '__start__',
@@ -1049,7 +1068,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Begin' },
               });
-              
+
               edges.push({
                 id: 'e2',
                 source: 'analyze_conversation',
@@ -1057,7 +1076,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Analysis Complete' },
               });
-              
+
               edges.push({
                 id: 'e3',
                 source: 'extract_insights',
@@ -1065,11 +1084,11 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Insights Ready' },
               });
-              
+
             } else if (agentId === 'storymaker') {
               // Build storymaker workflow graph
               const genres = metadata.output_schema?.properties?.genre?.enum || [];
-              
+
               nodes.push({
                 id: '__start__',
                 type: 'start',
@@ -1081,7 +1100,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 100, y: 200 },
               });
-              
+
               nodes.push({
                 id: 'plan_narrative',
                 type: 'condition',
@@ -1093,7 +1112,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 300, y: 200 },
               });
-              
+
               nodes.push({
                 id: 'generate_story',
                 type: 'generation',
@@ -1105,7 +1124,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 500, y: 200 },
               });
-              
+
               nodes.push({
                 id: '__end__',
                 type: 'end',
@@ -1117,7 +1136,7 @@ export const useStudioStore = create<StudioStore>()(
                 },
                 position: { x: 700, y: 200 },
               });
-              
+
               edges.push({
                 id: 'e1',
                 source: '__start__',
@@ -1125,7 +1144,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Begin' },
               });
-              
+
               edges.push({
                 id: 'e2',
                 source: 'plan_narrative',
@@ -1133,7 +1152,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Plan Ready' },
               });
-              
+
               edges.push({
                 id: 'e3',
                 source: 'generate_story',
@@ -1141,7 +1160,7 @@ export const useStudioStore = create<StudioStore>()(
                 type: 'default',
                 data: { label: 'Story Complete' },
               });
-              
+
             } else {
               // Default single-node graph for unknown agents
               nodes.push({
@@ -1166,18 +1185,18 @@ export const useStudioStore = create<StudioStore>()(
               },
               isLoading: false,
             });
-            
+
             console.log(`✅ Successfully created ${agentId} agent graph with ${nodes.length} nodes and ${edges.length} edges`);
-            
+
           } else if (agentData && agentData.agent) {
             // Create a basic node structure for the agent
             const agentInfo = agentData.agent;
             const agentType = agentInfo.type || 'chat';
-            
+
             // Create nodes based on agent type
             let nodes: GraphNode[] = [];
             let edges: GraphEdge[] = [];
-            
+
             if (agentType === 'react') {
               nodes = [
                 { id: 'reason', type: 'condition', data: { label: 'Reason', description: 'Reasoning step', status: 'idle' }, position: { x: 100, y: 200 } },
@@ -1219,12 +1238,12 @@ export const useStudioStore = create<StudioStore>()(
               },
               isLoading: false,
             });
-            
+
             console.log(`✅ Successfully created graph structure for ${agentType} agent`);
-            
+
           } else {
             console.warn('⚠️ No graph data found, creating placeholder');
-            
+
             // If no graph data found, create a simple placeholder
             set({
               graphState: {
@@ -1245,18 +1264,18 @@ export const useStudioStore = create<StudioStore>()(
               isLoading: false,
             });
           }
-          
+
         } catch (error) {
           console.error('❌ Error fetching graph data:', error);
-          
+
           // Attempt reconnection if server is unavailable
           const state = get();
           if (state.connectionStatus !== 'reconnecting' && state.retryAttempts < state.maxRetryAttempts) {
             state.setConnectionStatus('disconnected');
             state.attemptReconnection();
           }
-          
-          set({ 
+
+          set({
             error: `Failed to fetch graph data: ${error instanceof Error ? error.message : 'Unknown error'}`,
             isLoading: false,
             // Create a demo graph as fallback
@@ -1309,19 +1328,19 @@ export const useStudioStore = create<StudioStore>()(
       // Graph Execution Context - now supports multiple contexts per thread/assistant
       executionContext: initialExecutionContext,
       executionContexts: new Map<string, ExecutionState>(),
-      
+
       getExecutionContextKey: (threadId?: string, agentId?: string) => {
         const state = get();
         const tId = threadId || state.selectedThread?.id || 'default';
         const aId = agentId || state.selectedAgent?.id || 'default';
         return `${tId}-${aId}`;
       },
-      
+
       switchToExecutionContext: (threadId?: string, agentId?: string) => {
         const state = get();
         const key = state.getExecutionContextKey(threadId, agentId);
         const existingContext = state.executionContexts.get(key);
-        
+
         if (existingContext) {
           set({ executionContext: existingContext });
         } else {
@@ -1332,36 +1351,36 @@ export const useStudioStore = create<StudioStore>()(
             agentId: agentId || state.selectedAgent?.id,
             assistantId: agentId || state.selectedAgent?.id, // Keep for backward compatibility
           };
-          
+
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, newContext);
-          
-          set({ 
+
+          set({
             executionContext: newContext,
             executionContexts: newContexts
           });
         }
       },
-      
-      setExecutionContext: (context) => 
+
+      setExecutionContext: (context) =>
         set((state) => {
           const updatedContext = { ...state.executionContext, ...context };
-          
+
           // Update both current context and stored context
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
-          return { 
+
+          return {
             executionContext: updatedContext,
             executionContexts: newContexts
           };
         }),
-      
+
       startExecution: (initialState = {}, startFromNode) => {
         const executionId = `exec_${Date.now()}`;
         const state = get();
-        
+
         set((prevState) => {
           const updatedContext = {
             ...prevState.executionContext,
@@ -1370,17 +1389,17 @@ export const useStudioStore = create<StudioStore>()(
             currentState: initialState,
             executionId,
             startTime: new Date(),
-                      endTime: undefined,
-          threadId: prevState.selectedThread?.id,
-          agentId: prevState.selectedAgent?.id,
-          assistantId: prevState.selectedAgent?.id, // Keep for backward compatibility
+            endTime: undefined,
+            threadId: prevState.selectedThread?.id,
+            agentId: prevState.selectedAgent?.id,
+            assistantId: prevState.selectedAgent?.id, // Keep for backward compatibility
           };
-          
+
           // Update stored context
           const key = prevState.getExecutionContextKey();
           const newContexts = new Map(prevState.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           // Emit live update
           liveUpdateManager.emit({
             type: 'EXECUTION_STARTED',
@@ -1390,7 +1409,7 @@ export const useStudioStore = create<StudioStore>()(
               initialState
             }
           });
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts,
@@ -1402,33 +1421,33 @@ export const useStudioStore = create<StudioStore>()(
           };
         });
       },
-      
+
       pauseExecution: () =>
         set((state) => {
           const updatedContext = { ...state.executionContext, isPaused: true };
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts
           };
         }),
-      
+
       resumeExecution: () =>
         set((state) => {
           const updatedContext = { ...state.executionContext, isPaused: false };
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts
           };
         }),
-      
+
       stopExecution: () =>
         set((state) => {
           const updatedContext = {
@@ -1437,15 +1456,15 @@ export const useStudioStore = create<StudioStore>()(
             isPaused: false,
             endTime: new Date(),
           };
-          
+
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           // Emit live update
-          const duration = updatedContext.startTime ? 
+          const duration = updatedContext.startTime ?
             updatedContext.endTime!.getTime() - updatedContext.startTime.getTime() : 0;
-          
+
           liveUpdateManager.emit({
             type: 'EXECUTION_COMPLETED',
             data: {
@@ -1454,13 +1473,13 @@ export const useStudioStore = create<StudioStore>()(
               duration
             }
           });
-          
+
           // Auto-fit graph when execution completes
           setTimeout(() => {
             const currentState = get();
             currentState.fitGraphToView();
           }, 500);
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts,
@@ -1470,12 +1489,12 @@ export const useStudioStore = create<StudioStore>()(
             }
           };
         }),
-      
+
       stepExecution: () => {
         // This will be implemented with actual step logic
         console.log('Step execution triggered');
       },
-      
+
       addExecutionLog: (log) =>
         set((state) => {
           const newLog = {
@@ -1483,59 +1502,59 @@ export const useStudioStore = create<StudioStore>()(
             id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             timestamp: new Date(),
           };
-          
+
           const updatedContext = {
             ...state.executionContext,
             logs: [...state.executionContext.logs, newLog]
           };
-          
+
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           // Emit live update
           liveUpdateManager.emit({
             type: 'EXECUTION_LOG',
             data: newLog
           });
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts
           };
         }),
-      
+
       clearExecutionLogs: () =>
         set((state) => {
           const updatedContext = { ...state.executionContext, logs: [] };
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts
           };
         }),
-      
+
       setGraphExecutionState: (newState) =>
         set((state) => {
           const updatedContext = { ...state.executionContext, currentState: newState };
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts
           };
         }),
-      
+
       addBreakpoint: (nodeId, condition) =>
         set((state) => {
           const existingBreakpoint = state.executionContext.breakpoints.find((bp: any) => bp.nodeId === nodeId);
           if (existingBreakpoint) return state;
-          
+
           const updatedContext = {
             ...state.executionContext,
             breakpoints: [...state.executionContext.breakpoints, {
@@ -1544,34 +1563,34 @@ export const useStudioStore = create<StudioStore>()(
               condition,
             }]
           };
-          
+
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts
           };
         }),
-      
+
       removeBreakpoint: (nodeId) =>
         set((state) => {
           const updatedContext = {
             ...state.executionContext,
             breakpoints: state.executionContext.breakpoints.filter((bp: any) => bp.nodeId !== nodeId)
           };
-          
+
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts
           };
         }),
-      
+
       toggleBreakpoint: (nodeId) =>
         set((state) => {
           const updatedContext = {
@@ -1580,11 +1599,11 @@ export const useStudioStore = create<StudioStore>()(
               bp.nodeId === nodeId ? { ...bp, enabled: !bp.enabled } : bp
             )
           };
-          
+
           const key = state.getExecutionContextKey();
           const newContexts = new Map(state.executionContexts);
           newContexts.set(key, updatedContext);
-          
+
           return {
             executionContext: updatedContext,
             executionContexts: newContexts
@@ -1597,7 +1616,7 @@ export const useStudioStore = create<StudioStore>()(
         // We'll pass this function to GraphView and it will handle the actual focusing
         console.log('Focus on node:', nodeId);
       },
-      
+
       fitGraphToView: () => {
         // This will be implemented in GraphView component
         // We'll pass this function to GraphView and it will handle the actual fitting
@@ -1609,7 +1628,7 @@ export const useStudioStore = create<StudioStore>()(
       subscribeLiveUpdates: (eventType, callback) => liveUpdateManager.subscribe(eventType, callback),
       subscribeAllLiveUpdates: (callback) => liveUpdateManager.subscribeAll(callback),
       emitLiveUpdate: (event) => liveUpdateManager.emit(event),
-      
+
       // Enhanced methods with live updates
       addMessageToThreadLive: (threadId, message) => {
         const state = get();
@@ -1639,12 +1658,12 @@ export const useStudioStore = create<StudioStore>()(
       // Global execution system
       startGlobalExecution: (source, initialState = {}, userMessage) => {
         const state = get();
-        
+
         // Check if we have nodes available for execution
         const nodes = state.graphState.nodes;
         if (nodes.length === 0) {
           console.warn('No nodes available for execution - providing direct response');
-          
+
           // If no nodes, provide a direct response without graph execution
           if (state.selectedThread && source === 'chat') {
             const directResponse: Message = {
@@ -1657,13 +1676,13 @@ export const useStudioStore = create<StudioStore>()(
           }
           return;
         }
-        
+
         // Clear previous execution logs for a fresh start
         state.clearExecutionLogs();
-        
+
         // Start the execution in the store
         state.startExecution(initialState);
-        
+
         // If started from graph, create a chat message to show the execution
         if (source === 'graph' && state.selectedThread) {
           const executionMessage: Message = {
@@ -1674,7 +1693,7 @@ export const useStudioStore = create<StudioStore>()(
           };
           state.addMessageToThread(state.selectedThread.id, executionMessage);
         }
-        
+
         // Emit a live update to notify all interfaces
         liveUpdateManager.emit({
           type: 'EXECUTION_STARTED',
@@ -1684,24 +1703,24 @@ export const useStudioStore = create<StudioStore>()(
             initialState: { ...initialState, source, userMessage }
           }
         });
-        
+
         // Execute real GoLangGraph instead of simulation
         const executeRealGoLangGraph = async () => {
           try {
             const currentState = get();
             const { config, selectedThread, selectedAgent } = currentState;
-            
+
             if (!selectedAgent) {
               throw new Error('No agent selected');
             }
-            
+
             // Check if we're in demo mode
             const isDemoMode = config.apiUrl.includes('localhost:3000') || config.apiUrl.includes('localhost:3001') || !state.isConnected;
-            
+
             if (isDemoMode) {
               console.warn('Demo mode detected - cannot execute real GoLangGraph. Please connect to a GoLangGraph server.');
               currentState.stopExecution();
-              
+
               if (currentState.selectedThread) {
                 const errorMessage: Message = {
                   id: `msg-${Date.now()}-demo-error`,
@@ -1733,20 +1752,20 @@ export const useStudioStore = create<StudioStore>()(
               currentState.addThread(newThread);
               currentState.setSelectedThread(newThread);
             }
-            
+
             // Prepare the input for GoLangGraph execution
             const executionInput = {
               message: userMessage || 'Hello',
               input: userMessage || 'Hello',
               ...initialState
             };
-            
+
             console.log('🚀 Starting real GoLangGraph execution:', {
               agentId: selectedAgent.id,
               threadId: threadId,
               input: executionInput
             });
-            
+
             // Add initial log
             currentState.addExecutionLog({
               nodeId: 'system',
@@ -1759,17 +1778,17 @@ export const useStudioStore = create<StudioStore>()(
                 input: executionInput
               }
             });
-            
+
             // Use HTTP streaming (SSE) for real-time execution with GoLangGraph
             // The auto-server uses Server-Sent Events, not WebSocket
             const streamUrl = `${config.apiUrl}/api/${selectedAgent.id}/stream`;
-            
+
             const intermediateResults: Record<string, any> = {};
-            
+
             // Make HTTP request to the agent execution endpoint
             try {
               console.log('📡 Making HTTP request to agent...');
-              
+
               const response = await fetch(`${config.apiUrl}/api/${selectedAgent.id}`, {
                 method: 'POST',
                 headers: {
@@ -1780,14 +1799,14 @@ export const useStudioStore = create<StudioStore>()(
                   message: executionInput.input
                 })
               });
-              
+
               if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
               }
-              
+
               const data = await response.json();
               console.log('📡 Agent response:', data);
-              
+
               if (data.success && data.output) {
                 currentState.addExecutionLog({
                   nodeId: 'result',
@@ -1796,13 +1815,13 @@ export const useStudioStore = create<StudioStore>()(
                   message: 'Execution completed successfully',
                   data: data
                 });
-                
+
                 intermediateResults.final = data;
-                
+
                 // Add result to conversation - extract meaningful response from structured output
                 if (currentState.selectedThread) {
                   let content: string;
-                  
+
                   if (typeof data.output === 'string') {
                     content = data.output;
                   } else if (data.output && typeof data.output === 'object') {
@@ -1822,7 +1841,7 @@ export const useStudioStore = create<StudioStore>()(
                           break;
                         }
                       }
-                      
+
                       // If no meaningful text field found, show formatted structured data
                       if (!content) {
                         // Create a formatted summary of the structured output
@@ -1835,14 +1854,14 @@ export const useStudioStore = create<StudioStore>()(
                         if (data.output.themes && Array.isArray(data.output.themes)) {
                           summary.push('🎯 Themes: ' + data.output.themes.join(', '));
                         }
-                        
+
                         content = summary.length > 0 ? summary.join('\n\n') : JSON.stringify(data.output, null, 2);
                       }
                     }
                   } else {
                     content = 'Response received but no content available';
                   }
-                  
+
                   const resultMessage = {
                     id: `msg-${Date.now()}-result`,
                     role: 'assistant' as const,
@@ -1851,12 +1870,12 @@ export const useStudioStore = create<StudioStore>()(
                   };
                   currentState.addMessageToThread(currentState.selectedThread.id, resultMessage);
                 }
-                
+
                 // Simulate graph progression for visual feedback
                 const nodes = currentState.graphState.nodes;
                 for (let i = 0; i < nodes.length; i++) {
                   const node = nodes[i];
-                  
+
                   // Simulate node execution with delays
                   setTimeout(() => {
                     currentState.addExecutionLog({
@@ -1870,7 +1889,7 @@ export const useStudioStore = create<StudioStore>()(
                         timestamp: new Date().toISOString()
                       }
                     });
-                    
+
                     // Update graph state to show current node
                     currentState.setGraphState({
                       ...currentState.graphState,
@@ -1879,13 +1898,13 @@ export const useStudioStore = create<StudioStore>()(
                     });
                   }, i * 500); // 500ms delay between nodes
                 }
-                
+
               } else if (data.error) {
                 throw new Error(data.error);
               } else {
                 throw new Error('Unexpected response format');
               }
-              
+
             } catch (error) {
               console.error('❌ Agent execution failed:', error);
               currentState.addExecutionLog({
@@ -1895,7 +1914,7 @@ export const useStudioStore = create<StudioStore>()(
                 message: `Execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 data: { error }
               });
-              
+
               // Add error message to conversation
               if (currentState.selectedThread) {
                 const errorMessage = {
@@ -1907,12 +1926,12 @@ export const useStudioStore = create<StudioStore>()(
                 currentState.addMessageToThread(currentState.selectedThread.id, errorMessage);
               }
             }
-            
+
             // Complete execution
             const finalState = get();
             if (finalState.executionContext.isExecuting) {
               finalState.stopExecution();
-              
+
               // Emit completion event
               liveUpdateManager.emit({
                 type: 'EXECUTION_COMPLETED',
@@ -1922,11 +1941,11 @@ export const useStudioStore = create<StudioStore>()(
                     ...finalState.executionContext.currentState,
                     intermediate_results: intermediateResults
                   },
-                  duration: finalState.executionContext.startTime ? 
+                  duration: finalState.executionContext.startTime ?
                     Date.now() - finalState.executionContext.startTime.getTime() : 0
                 }
               });
-              
+
               // Add completion message only for graph executions (not chat, as we already added the result)
               if (finalState.selectedThread && source === 'graph') {
                 const executedNodes = new Set(finalState.executionContext.logs.map((log: ExecutionLog) => log.nodeId));
@@ -1939,12 +1958,12 @@ export const useStudioStore = create<StudioStore>()(
                 finalState.addMessageToThread(finalState.selectedThread.id, completionMessage);
               }
             }
-            
+
           } catch (error) {
             console.error('❌ GoLangGraph execution error:', error);
             const currentState = get();
             currentState.stopExecution();
-            
+
             // Add error log
             currentState.addExecutionLog({
               nodeId: 'system',
@@ -1953,7 +1972,7 @@ export const useStudioStore = create<StudioStore>()(
               message: `Execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
               data: { error: error instanceof Error ? error.message : String(error) }
             });
-            
+
             // Add error message to chat
             if (currentState.selectedThread) {
               const errorMessage: Message = {
@@ -1966,13 +1985,13 @@ export const useStudioStore = create<StudioStore>()(
             }
           }
         };
-        
+
         // Helper function to handle GoLangGraph events
         const handleLangGraphEvent = async (eventData: any, intermediateResults: Record<string, any>) => {
           const currentState = get();
-          
+
           console.log('📨 GoLangGraph event:', eventData);
-          
+
           switch (eventData.event) {
             case 'on_chain_start':
             case 'on_tool_start':
@@ -1985,7 +2004,7 @@ export const useStudioStore = create<StudioStore>()(
                   currentNode: nodeId,
                   executionPath: [...currentState.graphState.executionPath, nodeId]
                 });
-                
+
                 // Add execution log
                 currentState.addExecutionLog({
                   nodeId: nodeId,
@@ -1998,7 +2017,7 @@ export const useStudioStore = create<StudioStore>()(
                     input: eventData.data?.input
                   }
                 });
-                
+
                 // Emit step update
                 liveUpdateManager.emit({
                   type: 'EXECUTION_STEP',
@@ -2010,17 +2029,17 @@ export const useStudioStore = create<StudioStore>()(
                 });
               }
               break;
-              
+
             case 'on_chain_end':
             case 'on_tool_end':
             case 'on_llm_end':
               if (eventData.name && eventData.data?.output) {
                 const nodeId = eventData.name;
                 const output = eventData.data.output;
-                
+
                 // Store in intermediate results
                 intermediateResults[nodeId] = output;
-                
+
                 // Add execution log
                 currentState.addExecutionLog({
                   nodeId: nodeId,
@@ -2034,7 +2053,7 @@ export const useStudioStore = create<StudioStore>()(
                     intermediate_results: { ...intermediateResults }
                   }
                 });
-                
+
                 // Update execution state
                 currentState.setGraphExecutionState({
                   ...currentState.executionContext.currentState,
@@ -2043,7 +2062,7 @@ export const useStudioStore = create<StudioStore>()(
                 });
               }
               break;
-              
+
             case 'on_chain_stream':
               if (eventData.data?.chunk) {
                 // Handle streaming output
@@ -2060,7 +2079,7 @@ export const useStudioStore = create<StudioStore>()(
                 });
               }
               break;
-              
+
             case 'on_chat_model_stream':
               // Handle LLM streaming
               if (eventData.data?.chunk?.content) {
@@ -2074,15 +2093,15 @@ export const useStudioStore = create<StudioStore>()(
                 });
               }
               break;
-              
+
             case 'thread.run.completed':
               console.log('✅ Run completed:', eventData);
               break;
-              
+
             case 'thread.run.failed':
               console.error('❌ Run failed:', eventData);
               throw new Error(`Run failed: ${eventData.data?.error || 'Unknown error'}`);
-              
+
             default:
               // Log unknown events for debugging
               currentState.addExecutionLog({
@@ -2094,7 +2113,7 @@ export const useStudioStore = create<StudioStore>()(
               });
           }
         };
-        
+
         // Start the real execution
         executeRealGoLangGraph().catch((error: any) => {
           console.error('Failed to execute GoLangGraph:', error);
@@ -2102,6 +2121,44 @@ export const useStudioStore = create<StudioStore>()(
           currentState.stopExecution();
         });
       },
+
+      // Deep Agent actions
+      addInterrupt: (interrupt) =>
+        set((state) => {
+          liveUpdateManager.emit({
+            type: 'INTERRUPT_RECEIVED',
+            data: interrupt
+          });
+          return { activeInterrupts: [...state.activeInterrupts, interrupt] };
+        }),
+
+      resolveInterrupt: (interruptId, resolution) =>
+        set((state) => {
+          liveUpdateManager.emit({
+            type: 'INTERRUPT_RESOLVED',
+            data: { interruptId, resolution }
+          });
+          return {
+            activeInterrupts: state.activeInterrupts.map((i) =>
+              i.id === interruptId
+                ? { ...i, status: resolution === 'approved' ? 'approved' as const : 'rejected' as const, resolvedAt: new Date() }
+                : i
+            ),
+          };
+        }),
+
+      clearInterrupts: () => set({ activeInterrupts: [] }),
+
+      addSubAgentResult: (result) =>
+        set((state) => {
+          liveUpdateManager.emit({
+            type: 'SUB_AGENT_COMPLETED',
+            data: result
+          });
+          return { subAgentResults: [...state.subAgentResults, result] };
+        }),
+
+      clearSubAgentResults: () => set({ subAgentResults: [] }),
 
       // Reset
       reset: () => set(initialState),
@@ -2114,7 +2171,7 @@ export const useStudioStore = create<StudioStore>()(
 
 // React hooks for live updates
 export const useLiveUpdates = (
-  eventType: LiveUpdateEvent['type'], 
+  eventType: LiveUpdateEvent['type'],
   callback: (event: LiveUpdateEvent) => void,
   deps: any[] = []
 ) => {
@@ -2126,7 +2183,7 @@ export const useLiveUpdates = (
       callbackRef.current(event);
     });
     return unsubscribe;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventType, ...deps]);
 };
 
@@ -2142,7 +2199,7 @@ export const useAllLiveUpdates = (
       callbackRef.current(event);
     });
     return unsubscribe;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 };
 
@@ -2164,10 +2221,10 @@ export const useLiveExecutionStatus = () => {
 
     const unsubscribeStep = subscribeLiveUpdates('EXECUTION_STEP', (event) => {
       if (event.type === 'EXECUTION_STEP') {
-        setLiveStatus(prev => ({ 
-          ...prev, 
+        setLiveStatus(prev => ({
+          ...prev,
           currentNode: event.data.nodeName,
-          progress: event.data.progress 
+          progress: event.data.progress
         }));
       }
     });

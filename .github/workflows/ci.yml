@@ -4,12 +4,12 @@ on:
   push:
     branches: [ main, develop ]
     paths:
-      - 'GoLangGraphStudio/**'
+      - '**'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [ main ]
     paths:
-      - 'GoLangGraphStudio/**'
+      - '**'
   workflow_dispatch:
 
 jobs:
@@ -121,7 +121,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: piotrlaczkowski/golanggraph-studio
+          images: unicolab/golanggraph-studio
           tags: |
             type=ref,event=branch
             type=ref,event=pr

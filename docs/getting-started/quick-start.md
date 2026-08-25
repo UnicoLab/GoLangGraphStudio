@@ -8,15 +8,15 @@ Before you begin, ensure you have the following installed:
 
 - **Node.js 16 or higher** - [Download here](https://nodejs.org/)
 - **npm or yarn** - Comes with Node.js
-- **A running GoLangGraph server** - See [GoLangGraph Documentation](https://github.com/piotrlaczkowski/GoLangGraph)
+- **A running GoLangGraph server** - See [GoLangGraph Documentation](https://github.com/UnicoLab/GoLangGraph)
 
 ## Installation
 
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/piotrlaczkowski/GoLangGraph-Project.git
-cd GoLangGraph-Project/GoLangGraphStudio
+git clone https://github.com/UnicoLab/GoLangGraphStudio.git
+cd GoLangGraphStudio
 ```
 
 ### Step 2: Install Dependencies

@@ -58,8 +58,8 @@ A fully functional React interface for debugging and testing GoLangGraph agents,
 
 ```bash
 # Clone the repository
-git clone https://github.com/piotrlaczkowski/GoLangGraph-Project.git
-cd GoLangGraph-Project/GoLangGraphStudio
+git clone https://github.com/UnicoLab/GoLangGraphStudio.git
+cd GoLangGraphStudio
 
 # Install dependencies
 npm install
@@ -122,8 +122,8 @@ This project is licensed under the MIT License.
 
 ## 📚 Related Links
 
-- [GoLangGraph Documentation](https://github.com/piotrlaczkowski/GoLangGraph)
-- [GoLangGraph GitHub Repository](https://github.com/piotrlaczkowski/GoLangGraph)
+- [GoLangGraph Documentation](https://github.com/UnicoLab/GoLangGraph)
+- [GoLangGraph GitHub Repository](https://github.com/UnicoLab/GoLangGraph)
 - [Original LangGraph Studio](https://langchain-ai.github.io/langgraph/cloud/how-tos/studio/quick_start/)
 - [React Flow Documentation](https://reactflow.dev/)
 

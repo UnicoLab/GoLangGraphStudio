@@ -25,8 +25,8 @@ This is the recommended method for development and testing.
 #### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/piotrlaczkowski/GoLangGraph-Project.git
-cd GoLangGraph-Project/GoLangGraphStudio
+git clone https://github.com/UnicoLab/GoLangGraphStudio.git
+cd GoLangGraphStudio
 ```
 
 #### Step 2: Install Node.js Dependencies
@@ -83,8 +83,8 @@ For containerized deployment and production environments.
 
 ```bash
 # Clone the repository
-git clone https://github.com/piotrlaczkowski/GoLangGraph-Project.git
-cd GoLangGraph-Project/GoLangGraphStudio
+git clone https://github.com/UnicoLab/GoLangGraphStudio.git
+cd GoLangGraphStudio
 
 # Build and run with Docker
 docker build -t golanggraph-studio .
@@ -109,7 +109,7 @@ services:
     
   # Optional: Add GoLangGraph backend
   golanggraph-backend:
-    image: piotrlaczkowski/golanggraph:latest
+    image: unicolab/golanggraph:latest
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -267,4 +267,4 @@ After successful installation:
 
 ## Troubleshooting
 
-For installation issues, see our [Troubleshooting Guide](../guide/troubleshooting.md) or check the [GitHub Issues](https://github.com/piotrlaczkowski/GoLangGraph-Project/issues). 
+For installation issues, see our [Troubleshooting Guide](../guide/troubleshooting.md) or check the [GitHub Issues](https://github.com/UnicoLab/GoLangGraphStudio/issues). 

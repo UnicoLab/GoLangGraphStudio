@@ -170,7 +170,7 @@ export interface GoLangGraphConfig {
 }
 
 // Keep LangGraphConfig as alias for backward compatibility
-export interface LangGraphConfig extends GoLangGraphConfig {}
+export interface LangGraphConfig extends GoLangGraphConfig { }
 
 export interface ToolCall {
   id: string;
@@ -203,6 +203,49 @@ export interface Interrupt {
   reason: string;
   data: any;
   timestamp: Date;
+}
+
+// Deep Agent types - extends base Agent with middleware and sub-agent capabilities
+export interface DeepAgent extends Agent {
+  middleware: MiddlewareConfig[];
+  subAgents: SubAgentConfig[];
+  interruptOn: string[];
+  enablePlanning: boolean;
+  enableReflection: boolean;
+  enableFilesystem: boolean;
+}
+
+export interface MiddlewareConfig {
+  name: string;
+  enabled: boolean;
+  config?: Record<string, any>;
+}
+
+export interface SubAgentConfig {
+  name: string;
+  agentId: string;
+  description?: string;
+}
+
+export interface SubAgentResult {
+  agentName: string;
+  task: string;
+  result: string;
+  duration: number;
+  success: boolean;
+  error?: string;
+}
+
+export interface InterruptEvent {
+  id: string;
+  agentId: string;
+  threadId: string;
+  toolName: string;
+  toolArgs: Record<string, any>;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  timestamp: Date;
+  resolvedAt?: Date;
 }
 
 export type ViewMode = 'graph' | 'chat' | 'debug';

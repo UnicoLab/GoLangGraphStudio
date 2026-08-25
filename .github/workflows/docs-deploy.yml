@@ -4,9 +4,9 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'GoLangGraphStudio/docs/**'
-      - 'GoLangGraphStudio/mkdocs.yml'
-      - 'GoLangGraphStudio/requirements.txt'
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'requirements.txt'
       - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:
 
