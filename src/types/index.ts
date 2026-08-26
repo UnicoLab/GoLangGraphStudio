@@ -30,9 +30,10 @@ export interface AgentConfig {
   max_iterations: number;
   tools: string[];
   enable_streaming: boolean;
+  /** Present only when the agent sets an explicit streaming mode. */
+  streaming_mode?: string;
   timeout: number; // nanoseconds
   metadata?: Record<string, unknown>;
-  interrupt_on?: string[];
 }
 
 /** Mirrors `llm.ToolCall` JSON. */

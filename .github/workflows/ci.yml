@@ -46,11 +46,16 @@ jobs:
             npm install
           fi
 
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+
       - name: Run linter
-        run: npm run lint || true
+        run: npm run lint
 
       - name: Run tests
-        run: npm test -- --coverage --watchAll=false || true
+        run: npm test -- --coverage --watchAll=false
+        env:
+          CI: true
 
       - name: Build application
         run: npm run build
