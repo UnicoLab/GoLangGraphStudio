@@ -391,17 +391,17 @@ export const useStudioStore = create<StudioStore>()(
 
           set({ lastExecution: execution });
           get().addExecutionLog({
-            level: execution.Success ? 'info' : 'error',
-            message: `Execution ${execution.Status || (execution.Success ? 'completed' : 'failed')} in ${formatDuration(execution.Duration)} (HTTP ${wallMs}ms)`,
+            level: execution.success ? 'info' : 'error',
+            message: `Execution ${execution.success ? 'completed' : 'failed'} in ${formatDuration(execution.duration)} (HTTP ${wallMs}ms)`,
             data: execution,
           });
 
-          for (const call of summariseToolCalls(execution.ToolCalls)) {
+          for (const call of summariseToolCalls(execution.tool_calls ?? [])) {
             get().addExecutionLog({ level: 'debug', message: `Tool call: ${call}` });
           }
 
           // Reflect node statuses from the execution path when available.
-          const path = execution.ExecutionPath ?? [];
+          const path = execution.execution_path ?? [];
           const nodes = get().graphNodes;
           nodes.forEach((node) => markNode(node.id, 'completed'));
           if (path.length > 0) {
@@ -409,16 +409,16 @@ export const useStudioStore = create<StudioStore>()(
           }
           set({ currentGraphNode: path[path.length - 1] ?? nodes[nodes.length - 1]?.id });
 
-          const text = extractOutputText(execution.Output);
+          const text = extractOutputText(execution.output);
           const assistantMessage: Message = {
             id: uid('msg'),
             role: 'assistant',
             content: text || 'No output returned.',
             timestamp: new Date(),
             metadata: {
-              duration_ns: execution.Duration,
-              status: execution.Status,
-              tool_calls: execution.ToolCalls?.length ?? 0,
+              duration_ns: execution.duration,
+              status: execution.success ? 'completed' : 'failed',
+              tool_calls: execution.tool_calls?.length ?? 0,
             },
           };
           get().addMessage(thread.id, assistantMessage);

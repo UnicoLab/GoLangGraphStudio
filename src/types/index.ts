@@ -54,31 +54,44 @@ export interface Usage {
   total_tokens: number;
 }
 
-/** Mirrors `agent.AgentStep` JSON (Go default PascalCase fields). */
-export interface AgentStep {
-  NodeID: string;
-  Timestamp: string;
-  Input: Record<string, unknown>;
-  Output: Record<string, unknown>;
-  Error?: string;
+/**
+ * Mirrors `agent.StateChange` JSON.
+ *
+ * The server records one entry per node visit while an agent runs, which is
+ * what the debug view steps through.
+ */
+export interface StateChange {
+  node_id: string;
+  node_name: string;
+  timestamp: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
 }
 
-/** Mirrors `agent.AgentExecution` JSON (Go default PascalCase fields). */
+/**
+ * Mirrors `agent.AgentExecution` JSON.
+ *
+ * The Go struct tags every field, so the wire format is snake_case like the
+ * rest of the API — not Go's default PascalCase. There is a single `timestamp`
+ * marking the start plus a `duration`, rather than separate start and end
+ * timestamps, and `execution_path` lists the nodes that ran.
+ */
 export interface AgentExecution {
-  ID: string;
-  Input: string;
-  Output: unknown;
-  Success: boolean;
-  StartTime: string;
-  EndTime: string;
-  Duration: number; // nanoseconds
-  Status: string;
-  Steps: AgentStep[];
-  ToolCalls: ToolCall[];
-  Error?: string;
-  Metadata?: Record<string, unknown>;
-  StructuredOutput?: unknown;
-  ExecutionPath: string[];
+  id: string;
+  timestamp: string;
+  input: string;
+  /** Legacy flat string output, kept by the server for compatibility. */
+  output: string;
+  structured_output?: unknown;
+  tool_calls: ToolCall[] | null;
+  /** Go `time.Duration`, serialised as integer nanoseconds. */
+  duration: number;
+  success: boolean;
+  /** Present only when the execution failed. */
+  error?: string;
+  metadata?: Record<string, unknown>;
+  execution_path: string[];
+  state_changes?: StateChange[];
 }
 
 /** Mirrors `llm.ProviderConfig` (a subset of the useful fields). */

@@ -119,7 +119,7 @@ export function createApiClient(options: ApiClientOptions) {
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-/** Extracts a human readable string from an `AgentExecution.Output` value. */
+/** Extracts a human readable string from an `AgentExecution.output` value. */
 export function extractOutputText(output: unknown): string {
   if (typeof output === 'string') return output;
   if (output == null) return '';

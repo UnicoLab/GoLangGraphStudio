@@ -30,7 +30,7 @@ export const DebugView: React.FC = () => {
     [executionLogs, filter],
   );
 
-  const tools = summariseToolCalls(lastExecution?.ToolCalls ?? []);
+  const tools = summariseToolCalls(lastExecution?.tool_calls ?? []);
 
   return (
     <div className="h-full flex flex-col lg:flex-row overflow-hidden">
@@ -51,19 +51,19 @@ export const DebugView: React.FC = () => {
               {/* Status card */}
               <div className={`rounded-2xl border p-4 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
                 <div className="flex items-center gap-2 mb-3">
-                  {lastExecution.Success ? (
+                  {lastExecution.success ? (
                     <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
                   ) : (
                     <XCircleIcon className="w-5 h-5 text-red-500" />
                   )}
                   <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {lastExecution.Status ?? (lastExecution.Success ? 'Completed' : 'Failed')}
+                    {lastExecution.success ? 'Completed' : 'Failed'}
                   </span>
                 </div>
                 <div className="space-y-2 text-sm">
-                  <SummaryRow icon={<ClockIcon className="w-4 h-4" />} label="Duration" value={formatDuration(lastExecution.Duration)} darkMode={darkMode} />
+                  <SummaryRow icon={<ClockIcon className="w-4 h-4" />} label="Duration" value={formatDuration(lastExecution.duration)} darkMode={darkMode} />
                   <SummaryRow icon={<WrenchScrewdriverIcon className="w-4 h-4" />} label="Tool calls" value={String(tools.length)} darkMode={darkMode} />
-                  <SummaryRow label="Agent" value={selectedAgent?.name ?? lastExecution.ID} darkMode={darkMode} />
+                  <SummaryRow label="Agent" value={selectedAgent?.name ?? lastExecution.id} darkMode={darkMode} />
                   <SummaryRow label="Thread" value={selectedThread?.name ?? '—'} darkMode={darkMode} />
                 </div>
               </div>
@@ -90,12 +90,12 @@ export const DebugView: React.FC = () => {
                   <h4 className={`text-xs font-semibold uppercase tracking-wider ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     Output
                   </h4>
-                  <CopyButton text={extractOutputText(lastExecution.Output)} darkMode={darkMode} />
+                  <CopyButton text={extractOutputText(lastExecution.output)} darkMode={darkMode} />
                 </div>
                 <pre className={`whitespace-pre-wrap rounded-2xl p-3 text-xs font-mono leading-relaxed ${
                   darkMode ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-800'
                 }`}>
-                  {extractOutputText(lastExecution.Output) || '—'}
+                  {extractOutputText(lastExecution.output) || '—'}
                 </pre>
               </div>
             </>
