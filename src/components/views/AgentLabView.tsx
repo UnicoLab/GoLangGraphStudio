@@ -21,12 +21,13 @@ const label = (text: string) => text.replace(/[_-]/g, ' ').replace(/\b\w/g, (let
 
 /** A production-backed editor for the API's agent CRUD endpoints. */
 export const AgentLabView: React.FC = () => {
-  const { agents, providers, tools, selectedAgent, selectAgent, createAgent, updateAgent, deleteAgent, darkMode } = useStudioStore();
+  const { agents, providers, tools, selectedAgent, selectAgent, createAgent, updateAgent, deleteAgent, principal, darkMode } = useStudioStore();
   const [draft, setDraft] = useState<AgentConfig>(emptyAgent);
   const [editingId, setEditingId] = useState<string>();
   const [busy, setBusy] = useState(false);
 
   const providerNames = useMemo(() => providers.map((provider) => provider.name), [providers]);
+  const canAuthor = principal?.role === 'author' || principal?.role === 'admin';
 
   const startCreate = () => {
     setEditingId(undefined);
@@ -46,6 +47,7 @@ export const AgentLabView: React.FC = () => {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canAuthor) { toast.error('An author or admin API key is required to change agents.'); return; }
     if (!draft.name.trim() || !draft.provider.trim() || !draft.model.trim()) {
       toast.error('Name, provider, and model are required.');
       return;
@@ -65,6 +67,7 @@ export const AgentLabView: React.FC = () => {
   };
 
   const remove = async (agent: AgentConfig) => {
+    if (!canAuthor) { toast.error('An author or admin API key is required to delete agents.'); return; }
     if (!window.confirm(`Delete agent “${agent.name}”? Existing pipelines that use it will fail safely until repaired.`)) return;
     setBusy(true);
     try {
@@ -91,11 +94,12 @@ export const AgentLabView: React.FC = () => {
             <h2 className={`mt-1 text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Build agents, then test them in context.</h2>
             <p className={`mt-2 max-w-2xl text-sm ${muted}`}>Changes are saved directly through GoLangGraph’s agent API. Models and tools stay visible so a draft cannot quietly diverge from the server.</p>
           </div>
-          <button onClick={startCreate} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700">
+          <button disabled={!canAuthor} onClick={startCreate} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
             <PlusIcon className="w-4 h-4" /> New agent
           </button>
         </div>
 
+        {!canAuthor && <div className={`mb-5 rounded-xl border px-4 py-3 text-sm ${darkMode ? 'border-amber-500/30 bg-amber-950/20 text-amber-100' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>This session has <strong>{principal?.role ?? 'unknown'}</strong> access. Viewing and testing remain available; agent changes require an <strong>author</strong> or <strong>admin</strong> key.</div>}
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
           <section className="space-y-3">
             {agents.length === 0 ? (
@@ -124,8 +128,8 @@ export const AgentLabView: React.FC = () => {
                       </div>
                     </button>
                     <div className="flex flex-col gap-2">
-                      <button onClick={() => startEdit(agent)} className={`rounded-lg p-2 ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}`} title={`Edit ${agent.name}`}><PencilSquareIcon className="w-4 h-4" /></button>
-                      <button onClick={() => remove(agent)} className={`rounded-lg p-2 ${darkMode ? 'hover:bg-red-950 text-red-300' : 'hover:bg-red-50 text-red-600'}`} title={`Delete ${agent.name}`}><TrashIcon className="w-4 h-4" /></button>
+                      <button disabled={!canAuthor} onClick={() => startEdit(agent)} className={`rounded-lg p-2 disabled:opacity-30 ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}`} title={`Edit ${agent.name}`}><PencilSquareIcon className="w-4 h-4" /></button>
+                      <button disabled={!canAuthor} onClick={() => remove(agent)} className={`rounded-lg p-2 disabled:opacity-30 ${darkMode ? 'hover:bg-red-950 text-red-300' : 'hover:bg-red-50 text-red-600'}`} title={`Delete ${agent.name}`}><TrashIcon className="w-4 h-4" /></button>
                     </div>
                   </div>
                 </article>
@@ -134,6 +138,7 @@ export const AgentLabView: React.FC = () => {
           </section>
 
           <form onSubmit={submit} className={`h-fit rounded-2xl border p-5 space-y-4 shadow-sm ${surface}`}>
+            <fieldset disabled={!canAuthor} className="space-y-4 disabled:opacity-55">
             <div className="flex items-center justify-between">
               <div><h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>{editingId ? 'Edit live agent' : 'New live agent'}</h3><p className={`mt-0.5 text-xs ${muted}`}>{editingId ? 'Updates replace the current runtime config.' : 'Created on the connected server.'}</p></div>
               <WrenchScrewdriverIcon className="w-5 h-5 text-blue-500" />
@@ -152,7 +157,8 @@ export const AgentLabView: React.FC = () => {
             </div>
             <div><p className={`mb-2 text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Tools</p>{tools.length === 0 ? <p className={`text-xs ${muted}`}>No tools exposed by this server.</p> : <div className="flex flex-wrap gap-2">{tools.map((tool) => <label key={tool} className={`cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs ${draft.tools.indexOf(tool) >= 0 ? 'border-blue-500 bg-blue-500/10 text-blue-600' : darkMode ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-600'}`}><input className="sr-only" type="checkbox" checked={draft.tools.indexOf(tool) >= 0} onChange={() => toggleTool(tool)} />{tool}</label>)}</div>}</div>
             <label className={`flex cursor-pointer items-center gap-2 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}><input type="checkbox" checked={draft.enable_streaming} onChange={(event) => update('enable_streaming', event.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /> Enable streaming</label>
-            <button disabled={busy} type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 hover:bg-blue-700"><CheckCircleIcon className="w-4 h-4" />{busy ? 'Saving…' : editingId ? 'Save changes' : 'Create agent'}</button>
+            <button disabled={busy || !canAuthor} type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 hover:bg-blue-700"><CheckCircleIcon className="w-4 h-4" />{busy ? 'Saving…' : editingId ? 'Save changes' : 'Create agent'}</button>
+            </fieldset>
           </form>
         </div>
       </div>

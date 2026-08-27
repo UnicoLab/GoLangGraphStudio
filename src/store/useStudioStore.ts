@@ -13,6 +13,7 @@ import {
   Message,
   ProviderInfo,
   PipelineDefinition,
+  Principal,
   Thread,
   ViewMode,
   formatDuration,
@@ -102,6 +103,8 @@ interface StudioStore {
   isConnected: boolean;
   isConnecting: boolean;
   error?: string;
+  principal?: Principal;
+  authenticationRequired: boolean;
   retryAttempts: number;
   maxRetryAttempts: number;
   setConfig: (config: ConnectionConfig) => void;
@@ -129,7 +132,7 @@ interface StudioStore {
   loadGraphs: () => Promise<void>;
   createPipeline: (definition: PipelineDefinition) => Promise<GraphSummary>;
   deletePipeline: (id: string) => Promise<void>;
-  executeGraph: (id: string, input: string) => Promise<GraphExecution>;
+  executeGraph: (id: string, input: string, state?: Record<string, unknown>) => Promise<GraphExecution>;
 
   // threads
   threads: Thread[];
@@ -196,6 +199,8 @@ export const useStudioStore = create<StudioStore>()(
       isConnected: false,
       isConnecting: false,
       error: undefined,
+      principal: undefined,
+      authenticationRequired: false,
       retryAttempts: 0,
       maxRetryAttempts: 3,
 
@@ -229,10 +234,14 @@ export const useStudioStore = create<StudioStore>()(
             }
           };
 
-          const [agents, tools, providers] = await Promise.all([
+          const [agents, tools, providers, identity] = await Promise.all([
             loadOrReport('agents', () => client.listAgents(), [] as AgentConfig[]),
             loadOrReport('tools', () => client.listTools(), [] as string[]),
             loadOrReport('providers', () => client.listProviders(), [] as ProviderInfo[]),
+            // Older servers predate /whoami. Do not call their catalogues
+            // broken just because Studio cannot safely determine authoring
+            // privileges; the UI fails closed and leaves mutations disabled.
+            client.whoAmI().catch(() => undefined),
           ]);
 
           set({
@@ -244,6 +253,8 @@ export const useStudioStore = create<StudioStore>()(
             agents,
             tools,
             providers,
+            principal: identity?.principal,
+            authenticationRequired: identity?.authentication_required ?? false,
           });
 
           failures.forEach((failure) =>
@@ -277,6 +288,8 @@ export const useStudioStore = create<StudioStore>()(
           connectionStatus: 'disconnected',
           retryAttempts: 0,
           error: undefined,
+          principal: undefined,
+          authenticationRequired: false,
           agents: [],
           selectedAgent: undefined,
           agentHistory: [],
@@ -468,11 +481,11 @@ export const useStudioStore = create<StudioStore>()(
         get().addExecutionLog({ level: 'warn', message: `Deleted pipeline "${id}".` });
       },
 
-      executeGraph: async (id, input) => {
+      executeGraph: async (id, input, runtimeState) => {
         const { config } = get();
         const client = clientRef.current ?? createApiClient({ baseUrl: config.apiUrl, apiKey: config.apiKey });
         clientRef.current = client;
-        const result = await client.executeGraph(id, input);
+        const result = await client.executeGraph(id, input, runtimeState);
         set((state) => ({ pipelineRuns: [result, ...state.pipelineRuns].slice(0, 50) }));
         get().addExecutionLog({
           level: result.status === 'completed' ? 'info' : 'error',

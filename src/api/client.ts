@@ -4,6 +4,7 @@ import {
   GraphExecution,
   GraphSummary,
   PipelineDefinition,
+  Principal,
   ProviderInfo,
   ToolCall,
 } from '../types';
@@ -23,6 +24,11 @@ interface HealthResponse {
   timestamp: string;
   version: string;
   providers?: Record<string, unknown>;
+}
+
+export interface WhoAmIResponse {
+  principal: Principal;
+  authentication_required: boolean;
 }
 
 interface GraphTopologyResponse {
@@ -79,6 +85,8 @@ export function createApiClient(options: ApiClientOptions) {
 
   return {
     health: () => request<HealthResponse>('/api/v1/health'),
+
+    whoAmI: () => request<WhoAmIResponse>('/api/v1/whoami'),
 
     listAgents: async (): Promise<AgentConfig[]> => {
       const res = await request<{ agents: AgentConfig[] }>('/api/v1/agents');
@@ -147,9 +155,9 @@ export function createApiClient(options: ApiClientOptions) {
     deletePipeline: (id: string) =>
       request<{ message: string }>(`/api/v1/pipelines/${id}`, { method: 'DELETE' }),
 
-    executeGraph: (id: string, input: string): Promise<GraphExecution> =>
+    executeGraph: (id: string, input: string, state?: Record<string, unknown>): Promise<GraphExecution> =>
       request<GraphExecution>(`/api/v1/graphs/${id}/execute`, {
-        method: 'POST', body: JSON.stringify({ input }),
+        method: 'POST', body: JSON.stringify({ input, ...(state ? { state } : {}) }),
       }),
   };
 }

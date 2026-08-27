@@ -45,6 +45,17 @@ describe('request plumbing', () => {
     expect(headers['Content-Type']).toBe('application/json');
   });
 
+  it('reads an audit-safe authorization profile without receiving the API key back', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({
+      principal: { name: 'studio-author', role: 'author' }, authentication_required: true,
+    }));
+
+    await expect(client().whoAmI()).resolves.toEqual({
+      principal: { name: 'studio-author', role: 'author' }, authentication_required: true,
+    });
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/whoami');
+  });
+
   it('surfaces the server error field', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ error: 'graph not found', timestamp: '2024-01-01T00:00:00Z' }, 404),

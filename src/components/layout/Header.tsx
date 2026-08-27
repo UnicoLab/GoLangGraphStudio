@@ -10,6 +10,7 @@ import {
   CubeTransparentIcon,
   PlayCircleIcon,
   RectangleStackIcon,
+  ShieldCheckIcon,
   ChevronDownIcon,
   SunIcon,
   MoonIcon,
@@ -58,6 +59,8 @@ export const Header: React.FC = () => {
     retryAttempts,
     maxRetryAttempts,
     attemptReconnection,
+    principal,
+    authenticationRequired,
   } = useStudioStore();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -157,6 +160,18 @@ export const Header: React.FC = () => {
           darkMode={darkMode}
           onRetry={attemptReconnection}
         />
+
+        {principal && (
+          <span
+            title={authenticationRequired ? `Authenticated as ${principal.name}` : 'Local development mode'}
+            className={`hidden lg:flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium ${
+              darkMode ? 'border-violet-500/30 bg-violet-500/10 text-violet-200' : 'border-violet-200 bg-violet-50 text-violet-700'
+            }`}
+          >
+            <ShieldCheckIcon className="w-3.5 h-3.5" />
+            {principal.role}
+          </span>
+        )}
 
         <button
           onClick={() => setDarkMode(!darkMode)}

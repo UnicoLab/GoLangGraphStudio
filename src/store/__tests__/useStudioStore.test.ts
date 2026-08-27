@@ -26,6 +26,7 @@ const state = () => useStudioStore.getState();
 /** Routes a healthy single-agent server answers, before per-test overrides. */
 const baseRoutes = (): Record<string, RouteHandler> => ({
   '/api/v1/health': { body: healthFixture },
+  '/api/v1/whoami': { body: { principal: { name: 'local-development', role: 'admin' }, authentication_required: false } },
   '/api/v1/agents': { body: { agents: [agentFixture] } },
   '/api/v1/tools': { body: { tools: ['calculator', 'time'] } },
   '/api/v1/providers': {
@@ -57,6 +58,7 @@ describe('connecting', () => {
     expect(state().agents.map((a) => a.name)).toEqual(['Studio Agent']);
     expect(state().tools).toEqual(['calculator', 'time']);
     expect(state().providers.map((p) => p.name)).toEqual(['ollama']);
+    expect(state().principal).toMatchObject({ role: 'admin' });
     expect(state().selectedAgent?.id).toBe('studio-agent');
   });
 

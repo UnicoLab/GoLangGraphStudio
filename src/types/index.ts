@@ -8,10 +8,17 @@
 export type AgentType = 'chat' | 'react' | 'tool';
 export type ViewMode = 'graph' | 'chat' | 'debug' | 'agents' | 'pipelines' | 'runs';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed';
+export type APIKeyRole = 'viewer' | 'executor' | 'author' | 'admin';
 
 export interface ConnectionConfig {
   apiUrl: string;
   apiKey?: string;
+}
+
+/** Identity and capability returned by the server without ever exposing a key. */
+export interface Principal {
+  name: string;
+  role: APIKeyRole;
 }
 
 /**
@@ -122,10 +129,20 @@ export interface PipelineNode {
   name?: string;
 }
 
+export interface PipelineField {
+  type: 'any' | 'string' | 'number' | 'boolean' | 'object' | 'array';
+  required?: boolean;
+  description?: string;
+}
+
+export type PipelineSchema = Record<string, PipelineField>;
+
 export interface PipelineDefinition {
   id: string;
   name: string;
   nodes: PipelineNode[];
+  input_schema?: PipelineSchema;
+  output_schema?: PipelineSchema;
 }
 
 export interface GraphStep {
