@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -7,8 +7,10 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# The build type-checks the complete TypeScript source tree, including the
+# test helpers, so the builder needs the locked development type packages.
+# The final Nginx stage contains no Node dependencies.
+RUN npm ci && npm cache clean --force
 
 # Copy source code
 COPY . .
