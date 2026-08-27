@@ -1,6 +1,9 @@
 import {
   AgentConfig,
   AgentExecution,
+  GraphExecution,
+  GraphSummary,
+  PipelineDefinition,
   ProviderInfo,
   ToolCall,
 } from '../types';
@@ -87,6 +90,22 @@ export function createApiClient(options: ApiClientOptions) {
       return res.agent;
     },
 
+    createAgent: async (config: AgentConfig): Promise<AgentConfig> => {
+      const res = await request<{ agent: AgentConfig }>('/api/v1/agents', {
+        method: 'POST', body: JSON.stringify(config),
+      });
+      return res.agent;
+    },
+
+    updateAgent: async (id: string, config: AgentConfig): Promise<AgentConfig> => {
+      const res = await request<{ agent: AgentConfig }>(`/api/v1/agents/${id}`, {
+        method: 'PUT', body: JSON.stringify(config),
+      });
+      return res.agent;
+    },
+
+    deleteAgent: (id: string) => request<{ message: string }>(`/api/v1/agents/${id}`, { method: 'DELETE' }),
+
     executeAgent: async (id: string, input: string): Promise<AgentExecution> => {
       const res = await request<{ execution: AgentExecution }>(
         `/api/v1/agents/${id}/execute`,
@@ -114,6 +133,24 @@ export function createApiClient(options: ApiClientOptions) {
 
     getGraphTopology: (id: string) =>
       request<GraphTopologyResponse>(`/api/v1/graphs/${id}/topology`),
+
+    listGraphs: async (): Promise<GraphSummary[]> => {
+      const res = await request<{ graphs: GraphSummary[] }>('/api/v1/graphs');
+      return res.graphs ?? [];
+    },
+
+    createPipeline: (definition: PipelineDefinition) =>
+      request<{ pipeline: GraphSummary; topology: GraphTopologyResponse['topology'] }>('/api/v1/pipelines', {
+        method: 'POST', body: JSON.stringify(definition),
+      }),
+
+    deletePipeline: (id: string) =>
+      request<{ message: string }>(`/api/v1/pipelines/${id}`, { method: 'DELETE' }),
+
+    executeGraph: (id: string, input: string): Promise<GraphExecution> =>
+      request<GraphExecution>(`/api/v1/graphs/${id}/execute`, {
+        method: 'POST', body: JSON.stringify({ input }),
+      }),
   };
 }
 

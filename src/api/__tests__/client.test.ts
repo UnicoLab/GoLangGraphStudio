@@ -10,6 +10,7 @@
 
 import { createApiClient, ApiError, extractOutputText, summariseToolCalls } from '../client';
 import { vi } from 'vitest';
+import { AgentConfig } from '../../types';
 
 type FetchMock = ReturnType<typeof vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>>;
 
@@ -82,7 +83,7 @@ describe('request plumbing', () => {
 describe('agents', () => {
   // The server returns full configurations; it previously returned bare ID
   // strings, which left every rendered field undefined.
-  const agentConfig = {
+  const agentConfig: AgentConfig = {
     id: 'studio-agent',
     name: 'Studio Agent',
     type: 'chat',
@@ -116,6 +117,19 @@ describe('agents', () => {
   it('unwraps a single agent', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ agent: agentConfig }));
     await expect(client().getAgent('studio-agent')).resolves.toMatchObject({ id: 'studio-agent' });
+  });
+
+  it('creates, updates, and deletes agents through the live CRUD routes', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ agent: agentConfig }, 201))
+      .mockResolvedValueOnce(jsonResponse({ agent: { ...agentConfig, name: 'Updated Agent' } }))
+      .mockResolvedValueOnce(jsonResponse({ message: 'Agent deleted successfully' }));
+
+    await expect(client().createAgent(agentConfig)).resolves.toMatchObject({ id: 'studio-agent' });
+    await expect(client().updateAgent('studio-agent', agentConfig)).resolves.toMatchObject({ name: 'Updated Agent' });
+    await expect(client().deleteAgent('studio-agent')).resolves.toMatchObject({ message: expect.any(String) });
+
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'PUT', 'DELETE']);
   });
 });
 
@@ -222,6 +236,23 @@ describe('graph topology', () => {
     const conditional = (topology.topology.edges as Array<Record<string, unknown>>)[1];
     expect(conditional.from).toBe('decide');
     expect(conditional.to).toBe('long');
+  });
+
+  it('publishes and executes the safe multi-agent pipeline contract', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({
+        pipeline: { id: 'review', name: 'Review', start_node: 'draft', end_nodes: ['review'], node_count: 2, edge_count: 1, running: false },
+        topology: { nodes: [], edges: [] },
+      }, 201))
+      .mockResolvedValueOnce(jsonResponse({
+        graph_id: 'review', status: 'completed', steps: [{ node_id: 'draft', step: 1, success: true, duration_ms: 2, attempts: 1 }], state: { input: 'done' },
+      }));
+
+    const pipeline = await client().createPipeline({ id: 'review', name: 'Review', nodes: [{ id: 'draft', agent_id: 'writer' }] });
+    expect(pipeline.pipeline.node_count).toBe(2);
+    await expect(client().executeGraph('review', 'hello')).resolves.toMatchObject({ status: 'completed' });
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/pipelines');
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/api/v1/graphs/review/execute');
   });
 });
 

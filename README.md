@@ -11,7 +11,9 @@ A fully functional React interface for debugging and testing GoLangGraph agents,
 
 ## 🚀 Features
 
-This interface provides all the key features needed for GoLangGraph development:
+This interface is a visual control plane for GoLangGraph development. Every
+authoring surface is tied to a real server capability; controls that require
+application-owned Go code are called out rather than simulated.
 
 ### 🔗 Graph View
 
@@ -42,6 +44,29 @@ This interface provides all the key features needed for GoLangGraph development:
 - **Variable Tracking**: Monitor how variables change throughout execution
 - **Performance Metrics**: Execution timing and duration tracking
 - **WebSocket Streaming**: Real-time updates during execution
+
+### 🧪 Agent Lab
+- **Live Agent CRUD**: Create, edit, select, and delete agents through the
+  production `/api/v1/agents` API
+- **Provider and Tool Awareness**: Configure agents against providers and
+  tools exposed by the connected server
+
+### 🧱 Pipeline Lab
+- **Visual Multi-Agent Pipelines**: Compose existing agents into a
+  deterministic sequential execution graph
+- **Server-Validated Publishing**: The server refuses unknown agents and never
+  accepts executable browser code; each published pipeline is a real registered
+  graph that can be inspected and executed through the normal API
+- **Run Lab**: Execute a published pipeline and inspect each node result and
+  state checkpoint
+- **Honest Boundaries**: Custom Go node functions and conditional routing stay
+  application-owned rather than being shown as pretend drag-and-drop controls
+
+### 🏃 Run Explorer
+- **Persistent Agent History**: Reload server-side execution history for the
+  selected agent
+- **Pipeline Checkpoints**: Browse graph steps and state snapshots produced in
+  the current Studio session
 
 ### 🎛️ Additional Features
 - **Agent Management**: Create and manage multiple GoLangGraph agents
@@ -172,6 +197,12 @@ The interface is designed to work with the GoLangGraph Server API:
 - `GET /api/v1/agents/{id}/history` - Get execution history
 - `GET /api/v1/tools` - List available tools
 - `GET /api/v1/providers` - List LLM providers
+- `POST /api/v1/agents` - Create an agent
+- `PUT` / `DELETE /api/v1/agents/{id}` - Update or delete an agent
+- `GET /api/v1/graphs` - List registered graphs and pipelines
+- `POST /api/v1/pipelines` - Publish a safe visual sequential-agent pipeline
+- `DELETE /api/v1/pipelines/{id}` - Delete a Studio-published pipeline
+- `POST /api/v1/graphs/{id}/execute` - Run a graph and receive node checkpoints
 - `WS /api/v1/ws/agents/{id}/stream` - Stream execution events (WebSocket)
 
 ### Authentication

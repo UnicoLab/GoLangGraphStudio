@@ -7,6 +7,9 @@ import {
   ChatBubbleLeftRightIcon,
   CommandLineIcon,
   CogIcon,
+  CubeTransparentIcon,
+  PlayCircleIcon,
+  RectangleStackIcon,
   ChevronDownIcon,
   SunIcon,
   MoonIcon,
@@ -20,6 +23,9 @@ const views: { key: ViewMode; label: string; icon: React.ComponentType<{ classNa
   { key: 'chat', label: 'Chat', icon: ChatBubbleLeftRightIcon },
   { key: 'graph', label: 'Graph', icon: CommandLineIcon },
   { key: 'debug', label: 'Debug', icon: CogIcon },
+  { key: 'agents', label: 'Agents', icon: RectangleStackIcon },
+  { key: 'pipelines', label: 'Pipelines', icon: CubeTransparentIcon },
+  { key: 'runs', label: 'Runs', icon: PlayCircleIcon },
 ];
 
 const typeStyles: Record<AgentType, string> = {
@@ -80,7 +86,7 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        <nav className={`hidden md:flex items-center space-x-1 rounded-xl p-1 ml-4 ${darkMode ? 'bg-gray-800/80' : 'bg-gray-100'}`}>
+        <nav className={`hidden xl:flex items-center space-x-1 rounded-xl p-1 ml-4 ${darkMode ? 'bg-gray-800/80' : 'bg-gray-100'}`}>
           {views.map(({ key, label, icon: Icon }) => (
             <button
               key={key}

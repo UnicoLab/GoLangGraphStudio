@@ -6,6 +6,9 @@ import { MainContent } from './MainContent';
 import { GraphView } from '../views/GraphView';
 import { ChatView } from '../views/ChatView';
 import { DebugView } from '../views/DebugView';
+import { AgentLabView } from '../views/AgentLabView';
+import { PipelineLabView } from '../views/PipelineLabView';
+import { RunsView } from '../views/RunsView';
 
 export const StudioLayout: React.FC = () => {
   const { currentView, setCurrentView, sidebarCollapsed, darkMode } = useStudioStore();
@@ -34,6 +37,18 @@ export const StudioLayout: React.FC = () => {
             e.preventDefault();
             setCurrentView('debug');
             break;
+          case '4':
+            e.preventDefault();
+            setCurrentView('agents');
+            break;
+          case '5':
+            e.preventDefault();
+            setCurrentView('pipelines');
+            break;
+          case '6':
+            e.preventDefault();
+            setCurrentView('runs');
+            break;
         }
       }
     };
@@ -50,6 +65,12 @@ export const StudioLayout: React.FC = () => {
         return <ChatView />;
       case 'debug':
         return <DebugView />;
+      case 'agents':
+        return <AgentLabView />;
+      case 'pipelines':
+        return <PipelineLabView />;
+      case 'runs':
+        return <RunsView />;
       default:
         return <ChatView />;
     }
@@ -83,4 +104,4 @@ export const StudioLayout: React.FC = () => {
       </div>
     </div>
   );
-}; 
+};

@@ -6,10 +6,13 @@ import {
   ConnectionConfig,
   ConnectionStatus,
   ExecutionLog,
+  GraphExecution,
   GraphEdge,
   GraphNode,
+  GraphSummary,
   Message,
   ProviderInfo,
+  PipelineDefinition,
   Thread,
   ViewMode,
   formatDuration,
@@ -109,11 +112,24 @@ interface StudioStore {
   // agents / tools / providers
   agents: AgentConfig[];
   selectedAgent?: AgentConfig;
+  agentHistory: AgentExecution[];
   tools: string[];
   providers: ProviderInfo[];
   loadAgents: () => Promise<void>;
   selectAgent: (agent?: AgentConfig) => void;
+  createAgent: (config: AgentConfig) => Promise<AgentConfig>;
+  updateAgent: (id: string, config: AgentConfig) => Promise<AgentConfig>;
+  deleteAgent: (id: string) => Promise<void>;
+  loadAgentHistory: (id: string) => Promise<void>;
   fetchGraphData: (agentId: string) => Promise<void>;
+
+  // visual pipelines / graph runs
+  graphs: GraphSummary[];
+  pipelineRuns: GraphExecution[];
+  loadGraphs: () => Promise<void>;
+  createPipeline: (definition: PipelineDefinition) => Promise<GraphSummary>;
+  deletePipeline: (id: string) => Promise<void>;
+  executeGraph: (id: string, input: string) => Promise<GraphExecution>;
 
   // threads
   threads: Thread[];
@@ -263,8 +279,11 @@ export const useStudioStore = create<StudioStore>()(
           error: undefined,
           agents: [],
           selectedAgent: undefined,
+          agentHistory: [],
           tools: [],
           providers: [],
+          graphs: [],
+          pipelineRuns: [],
           executionLogs: [],
           lastExecution: undefined,
           graphNodes: [],
@@ -297,6 +316,51 @@ export const useStudioStore = create<StudioStore>()(
         } catch (error) {
           set({ error: describeError(error) });
         }
+      },
+
+      createAgent: async (config) => {
+        const { config: connection } = get();
+        const client = clientRef.current ?? createApiClient({ baseUrl: connection.apiUrl, apiKey: connection.apiKey });
+        clientRef.current = client;
+        const created = await client.createAgent(config);
+        set((state) => ({ agents: [...state.agents, created].sort((a, b) => a.name.localeCompare(b.name)) }));
+        get().selectAgent(created);
+        get().addExecutionLog({ level: 'info', message: `Created agent "${created.name}".` });
+        return created;
+      },
+
+      updateAgent: async (id, config) => {
+        const { config: connection } = get();
+        const client = clientRef.current ?? createApiClient({ baseUrl: connection.apiUrl, apiKey: connection.apiKey });
+        clientRef.current = client;
+        const updated = await client.updateAgent(id, config);
+        set((state) => ({
+          agents: state.agents.map((agent) => agent.id === id ? updated : agent),
+          selectedAgent: state.selectedAgent?.id === id ? updated : state.selectedAgent,
+        }));
+        get().fetchGraphData(updated.id).catch(() => undefined);
+        get().addExecutionLog({ level: 'info', message: `Updated agent "${updated.name}".` });
+        return updated;
+      },
+
+      deleteAgent: async (id) => {
+        const { config: connection, selectedAgent } = get();
+        const client = clientRef.current ?? createApiClient({ baseUrl: connection.apiUrl, apiKey: connection.apiKey });
+        clientRef.current = client;
+        await client.deleteAgent(id);
+        set((state) => ({
+          agents: state.agents.filter((agent) => agent.id !== id),
+          selectedAgent: selectedAgent?.id === id ? undefined : selectedAgent,
+          ...(selectedAgent?.id === id ? { graphNodes: [], graphEdges: [], currentGraphNode: undefined } : {}),
+        }));
+        get().addExecutionLog({ level: 'warn', message: `Deleted agent "${id}".` });
+      },
+
+      loadAgentHistory: async (id) => {
+        const { config } = get();
+        const client = clientRef.current ?? createApiClient({ baseUrl: config.apiUrl, apiKey: config.apiKey });
+        clientRef.current = client;
+        set({ agentHistory: await client.getAgentHistory(id) });
       },
 
       selectAgent: (agent) => {
@@ -367,9 +431,61 @@ export const useStudioStore = create<StudioStore>()(
         set({ graphNodes: nodes, graphEdges: edges, currentGraphNode: undefined });
       },
 
+      graphs: [],
+      pipelineRuns: [],
+
+      loadGraphs: async () => {
+        const { config } = get();
+        const client = clientRef.current ?? createApiClient({ baseUrl: config.apiUrl, apiKey: config.apiKey });
+        clientRef.current = client;
+        try {
+          set({ graphs: await client.listGraphs() });
+        } catch (error) {
+          set({ error: describeError(error) });
+          throw error;
+        }
+      },
+
+      createPipeline: async (definition) => {
+        const { config } = get();
+        const client = clientRef.current ?? createApiClient({ baseUrl: config.apiUrl, apiKey: config.apiKey });
+        clientRef.current = client;
+        const response = await client.createPipeline(definition);
+        set((state) => ({
+          graphs: [...state.graphs.filter((graph) => graph.id !== response.pipeline.id), response.pipeline]
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        }));
+        get().addExecutionLog({ level: 'info', message: `Published pipeline "${response.pipeline.name}".` });
+        return response.pipeline;
+      },
+
+      deletePipeline: async (id) => {
+        const { config } = get();
+        const client = clientRef.current ?? createApiClient({ baseUrl: config.apiUrl, apiKey: config.apiKey });
+        clientRef.current = client;
+        await client.deletePipeline(id);
+        set((state) => ({ graphs: state.graphs.filter((graph) => graph.id !== id) }));
+        get().addExecutionLog({ level: 'warn', message: `Deleted pipeline "${id}".` });
+      },
+
+      executeGraph: async (id, input) => {
+        const { config } = get();
+        const client = clientRef.current ?? createApiClient({ baseUrl: config.apiUrl, apiKey: config.apiKey });
+        clientRef.current = client;
+        const result = await client.executeGraph(id, input);
+        set((state) => ({ pipelineRuns: [result, ...state.pipelineRuns].slice(0, 50) }));
+        get().addExecutionLog({
+          level: result.status === 'completed' ? 'info' : 'error',
+          message: `Pipeline "${id}" ${result.status}${result.error ? `: ${result.error}` : ''}`,
+          data: result,
+        });
+        return result;
+      },
+
       // agents / tools / providers
       agents: [],
       selectedAgent: undefined,
+      agentHistory: [],
       tools: [],
       providers: [],
 

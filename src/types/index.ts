@@ -6,7 +6,7 @@
 // layers.
 
 export type AgentType = 'chat' | 'react' | 'tool';
-export type ViewMode = 'graph' | 'chat' | 'debug';
+export type ViewMode = 'graph' | 'chat' | 'debug' | 'agents' | 'pipelines' | 'runs';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'failed';
 
 export interface ConnectionConfig {
@@ -102,6 +102,48 @@ export interface ProviderInfo {
   endpoint?: string;
   model?: string;
   [key: string]: unknown;
+}
+
+/** Summary returned by the server's registered graph catalogue. */
+export interface GraphSummary {
+  id: string;
+  name: string;
+  start_node: string;
+  end_nodes: string[];
+  node_count: number;
+  edge_count: number;
+  running: boolean;
+}
+
+/** A safe visual-pipeline step: it references an existing server agent. */
+export interface PipelineNode {
+  id: string;
+  agent_id: string;
+  name?: string;
+}
+
+export interface PipelineDefinition {
+  id: string;
+  name: string;
+  nodes: PipelineNode[];
+}
+
+export interface GraphStep {
+  node_id: string;
+  step: number;
+  success: boolean;
+  error?: string;
+  duration_ms: number;
+  attempts: number;
+  state?: Record<string, unknown>;
+}
+
+export interface GraphExecution {
+  graph_id: string;
+  status: 'completed' | 'interrupted' | 'canceled' | 'invalid' | 'failed';
+  error?: string;
+  state?: Record<string, unknown>;
+  steps: GraphStep[];
 }
 
 // ---------------------------------------------------------------------------
