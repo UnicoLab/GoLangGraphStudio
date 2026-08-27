@@ -65,7 +65,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build-docs
+    # Repositories without GitHub Pages enabled must still validate the docs.
+    # Set the repository variable to opt in to the external deployment.
+    if: vars.DEPLOY_GITHUB_PAGES == 'true'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4 
+        uses: actions/deploy-pages@v4

@@ -61,9 +61,6 @@ plugins:
       type: timeago
   - minify:
       minify_html: true
-  - social:
-      cards_layout_options:
-        color: "#2196F3"
 
 markdown_extensions:
   - abbr
@@ -159,4 +156,4 @@ extra_javascript:
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 docs_dir: docs
-site_dir: site 
+site_dir: site
