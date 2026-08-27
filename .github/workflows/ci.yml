@@ -107,6 +107,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     needs: [test, security]
+    env:
+      # GitHub does not permit the secrets context directly in step `if`
+      # expressions; expose only the boolean capability to later steps.
+      CAN_PUSH_DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_TOKEN != '' }}
 
     steps:
       - name: Checkout code
@@ -116,7 +120,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        if: github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_TOKEN != ''
+        if: env.CAN_PUSH_DOCKER_IMAGE == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -140,7 +144,7 @@ jobs:
           file: Dockerfile
           # A main-branch build must stay verifiable for forks and repositories
           # that do not publish images. Push only when Docker credentials exist.
-          push: ${{ github.event_name != 'pull_request' && secrets.DOCKER_USERNAME != '' && secrets.DOCKER_TOKEN != '' }}
+          push: ${{ env.CAN_PUSH_DOCKER_IMAGE == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
