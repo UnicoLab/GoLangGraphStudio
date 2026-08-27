@@ -29,6 +29,11 @@ export const ConnectionSetup: React.FC = () => {
     const { isConnected, error } = useStudioStore.getState();
     if (isConnected) {
       toast.success('Connected to GoLangGraph server');
+      // The server can answer /health and still fail to list agents, tools or
+      // providers. `connect` records that in `error` while staying connected;
+      // showing it here is the difference between "this server has no agents"
+      // and "this server's agent endpoint is broken".
+      if (error) toast.error(error);
       navigate('/studio');
     } else {
       toast.error(error || 'Failed to connect');
