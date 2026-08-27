@@ -9,6 +9,7 @@
  */
 import { AgentConfig, AgentExecution } from '../types';
 import { useStudioStore } from '../store/useStudioStore';
+import { vi } from 'vitest';
 
 /**
  * The pristine store state, captured at import time before any test has had a
@@ -42,8 +43,8 @@ export type RouteHandler = RouteResult | ((init?: RequestInit) => RouteResult | 
  * A handler may be a function returning a promise, which lets a test hold a
  * response open and control the order in which concurrent requests resolve.
  */
-export function mockServer(routes: Record<string, RouteHandler>): jest.Mock {
-  const fetchMock = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+export function mockServer(routes: Record<string, RouteHandler>): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = new URL(String(input), 'http://localhost').pathname;
     const handler = routes[path];
     if (!handler) {
@@ -62,7 +63,7 @@ export function mockServer(routes: Record<string, RouteHandler>): jest.Mock {
     } as Response;
   });
 
-  global.fetch = fetchMock as unknown as typeof fetch;
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
   return fetchMock;
 }
 

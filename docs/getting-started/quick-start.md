@@ -6,7 +6,7 @@ Get up and running with GoLangGraph Studio in just a few minutes!
 
 Before you begin, ensure you have the following installed:
 
-- **Node.js 16 or higher** - [Download here](https://nodejs.org/)
+- **Node.js 20.19 or higher** - [Download here](https://nodejs.org/)
 - **npm or yarn** - Comes with Node.js
 - **A running GoLangGraph server** - See [GoLangGraph Documentation](https://github.com/UnicoLab/GoLangGraph)
 
@@ -47,7 +47,7 @@ cd GoLangGraphStudio
     yarn start
     ```
 
-The application will start and automatically open in your browser at `http://localhost:3000`.
+The application will be available at `http://localhost:5173`.
 
 ## Initial Setup
 
@@ -65,7 +65,7 @@ Configure the following:
 
 ### 2. Test the Connection
 
-Click the "Test Connection" button to verify that GoLangGraph Studio can connect to your server.
+Click the "Connect" button to verify that GoLangGraph Studio can connect to your server.
 
 ### 3. Start Using the Interface
 
@@ -118,4 +118,4 @@ Once connected, you can:
 **UI Not Loading**
 : Clear your browser cache and refresh the page.
 
-For more troubleshooting tips, see the [Troubleshooting Guide](../guide/troubleshooting.md). 
+For more troubleshooting tips, see the [Troubleshooting Guide](../guide/troubleshooting.md).

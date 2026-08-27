@@ -8,8 +8,6 @@
  * and no label, so there is no Testing Library query that can reach them and
  * the rendered container is the only way to assert on the drawn geometry.
  */
-/* eslint-disable testing-library/no-container, testing-library/no-node-access */
-
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { GraphView } from '../GraphView';

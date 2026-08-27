@@ -173,7 +173,9 @@ export const useStudioStore = create<StudioStore>()(
   devtools(
     (set, get) => ({
       // connection
-      config: { apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8080' },
+      config: {
+        apiUrl: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8080'),
+      },
       connectionStatus: 'disconnected',
       isConnected: false,
       isConnecting: false,

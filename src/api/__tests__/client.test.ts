@@ -9,8 +9,9 @@
  */
 
 import { createApiClient, ApiError, extractOutputText, summariseToolCalls } from '../client';
+import { vi } from 'vitest';
 
-type FetchMock = jest.Mock<Promise<Response>, [RequestInfo | URL, RequestInit?]>;
+type FetchMock = ReturnType<typeof vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>>;
 
 /** Builds a fetch stub returning one JSON body. */
 function jsonResponse(body: unknown, status = 200): Response {
@@ -25,8 +26,8 @@ function jsonResponse(body: unknown, status = 200): Response {
 let fetchMock: FetchMock;
 
 beforeEach(() => {
-  fetchMock = jest.fn();
-  global.fetch = fetchMock as unknown as typeof fetch;
+  fetchMock = vi.fn();
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
 });
 
 const client = () => createApiClient({ baseUrl: 'http://localhost:8080', apiKey: 'test-key' });

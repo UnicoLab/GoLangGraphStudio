@@ -53,7 +53,7 @@ This interface provides all the key features needed for GoLangGraph development:
 ## 🛠️ Installation
 
 ### Prerequisites
-- Node.js 16+ 
+- Node.js 20.19+
 - npm or yarn
 - A running GoLangGraph server (for actual functionality)
 
@@ -80,7 +80,7 @@ This interface provides all the key features needed for GoLangGraph development:
    ```
 
 4. **Open your browser**
-   Navigate to `http://localhost:3000`
+   Navigate to `http://localhost:5173`
 
 ## 🔧 Configuration
 
@@ -103,9 +103,7 @@ You can also configure the application using environment variables:
 
 ```bash
 # .env file
-REACT_APP_GOLANGGRAPH_API_URL=http://localhost:8080
-REACT_APP_AGENT_ID=agent
-REACT_APP_API_KEY=your_api_key_here
+VITE_API_URL=http://localhost:8080
 ```
 
 ## 🚀 Usage
@@ -127,7 +125,7 @@ This will start the GoLangGraph server at `http://localhost:8080` by default.
 ### Using the Interface
 
 1. **Connection Setup**: Configure your GoLangGraph server connection
-2. **Choose Your View**: 
+2. **Choose Your View**:
    - **Graph View**: Visualize and control graph execution
    - **Chat Mode**: Interactive chat with your agent
    - **Debug View**: Inspect execution details and logs
@@ -265,4 +263,4 @@ This repository has been migrated from `piotrlaczkowski/GoLangGraphStudio` to [`
 
 ---
 
-**Note**: This is an independent React interface specifically adapted for GoLangGraph. For the official LangGraph Studio, please visit [studio.langchain.com](https://studio.langchain.com/). 
+**Note**: This is an independent React interface specifically adapted for GoLangGraph. For the official LangGraph Studio, please visit [studio.langchain.com](https://studio.langchain.com/).

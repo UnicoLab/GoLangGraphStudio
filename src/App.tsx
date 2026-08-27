@@ -21,24 +21,24 @@ function App() {
   }, [darkMode]);
 
   return (
-    <Router future={{ v7_relativeSplatPath: true }}>
+    <Router>
       <div className={`App ${darkMode ? 'dark' : ''}`}>
         <Routes>
-          <Route 
-            path="/setup" 
-            element={<ConnectionSetup />} 
+          <Route
+            path="/setup"
+            element={<ConnectionSetup />}
           />
-          <Route 
-            path="/studio" 
-            element={<StudioLayout />} 
+          <Route
+            path="/studio"
+            element={<StudioLayout />}
           />
-          <Route 
-            path="/" 
-            element={<Navigate to={isConnected ? "/studio" : "/setup"} replace />} 
+          <Route
+            path="/"
+            element={<Navigate to={isConnected ? "/studio" : "/setup"} replace />}
           />
         </Routes>
       </div>
-      <Toaster 
+      <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
@@ -67,4 +67,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

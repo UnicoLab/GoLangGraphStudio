@@ -1,4 +1,4 @@
-// Jest setup, picked up automatically by react-scripts.
+// Vitest setup, loaded before every test by vite.config.ts.
 //
 // `@testing-library/jest-dom` adds the DOM matchers (`toBeInTheDocument`,
 // `toHaveTextContent`, …) the component tests use to assert against real

@@ -119,7 +119,7 @@ const EmptyState: React.FC<{ agent?: AgentConfig; darkMode: boolean }> = ({ agen
 
 const TypingIndicator: React.FC<{ name?: string; darkMode: boolean }> = ({ name, darkMode }) => (
   <div className="flex items-end gap-3 animate-fade-in">
-    <Avatar darkMode={darkMode} />
+    <Avatar />
     <div className={`px-4 py-3 rounded-2xl rounded-bl-sm ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
       <div className="flex items-center gap-2">
         <span className="flex space-x-1">
@@ -139,7 +139,7 @@ const MessageBubble: React.FC<{ message: Message; darkMode: boolean }> = ({ mess
   const isUser = message.role === 'user';
   return (
     <div className={`flex items-end gap-3 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
-      {!isUser && <Avatar darkMode={darkMode} />}
+      {!isUser && <Avatar />}
       <div
         className={`relative group max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
           isUser
@@ -165,7 +165,7 @@ const MessageBubble: React.FC<{ message: Message; darkMode: boolean }> = ({ mess
   );
 };
 
-const Avatar: React.FC<{ darkMode: boolean }> = ({ darkMode }) => (
+const Avatar: React.FC = () => (
   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow">
     <SparklesIcon className="w-4 h-4 text-white" />
   </div>

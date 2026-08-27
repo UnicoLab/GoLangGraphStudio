@@ -50,7 +50,7 @@ A fully functional React interface for debugging and testing GoLangGraph agents,
 ## 🛠️ Quick Start
 
 ### Prerequisites
-- Node.js 16+ 
+- Node.js 20.19+
 - npm or yarn
 - A running GoLangGraph server
 
@@ -68,7 +68,7 @@ npm install
 npm start
 ```
 
-Open your browser and navigate to `http://localhost:3000`
+Open your browser and navigate to `http://localhost:5173`
 
 ## 🔧 Configuration
 
@@ -129,4 +129,4 @@ This project is licensed under the MIT License.
 
 ---
 
-**Note**: This is an independent React interface specifically adapted for GoLangGraph. For the official LangGraph Studio, please visit [studio.langchain.com](https://studio.langchain.com/). 
+**Note**: This is an independent React interface specifically adapted for GoLangGraph. For the official LangGraph Studio, please visit [studio.langchain.com](https://studio.langchain.com/).
