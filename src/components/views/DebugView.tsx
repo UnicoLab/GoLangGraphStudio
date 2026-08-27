@@ -60,6 +60,26 @@ export const DebugView: React.FC = () => {
                     {lastExecution.success ? 'Completed' : 'Failed'}
                   </span>
                 </div>
+
+                {/*
+                  A failed execution carries its reason in `error`. Nothing
+                  rendered it, so a failed run showed the word "Failed", an
+                  empty output block and no explanation whatsoever — the one
+                  thing a debugging console has to tell you.
+                */}
+                {!lastExecution.success && (
+                  <p
+                    role="alert"
+                    className={`mb-3 rounded-xl border px-3 py-2 text-xs leading-relaxed ${
+                      darkMode
+                        ? 'border-red-500/40 bg-red-900/30 text-red-200'
+                        : 'border-red-200 bg-red-50 text-red-700'
+                    }`}
+                  >
+                    {lastExecution.error?.trim() || 'The server reported a failure without a reason.'}
+                  </p>
+                )}
+
                 <div className="space-y-2 text-sm">
                   <SummaryRow icon={<ClockIcon className="w-4 h-4" />} label="Duration" value={formatDuration(lastExecution.duration)} darkMode={darkMode} />
                   <SummaryRow icon={<WrenchScrewdriverIcon className="w-4 h-4" />} label="Tool calls" value={String(tools.length)} darkMode={darkMode} />

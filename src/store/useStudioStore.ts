@@ -19,6 +19,10 @@ import { ApiClient, createApiClient, extractOutputText, summariseToolCalls } fro
 const uid = (prefix: string) =>
   `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+/** Normalises anything thrown into a message we can put in front of the user. */
+const describeError = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 // ---------------------------------------------------------------------------
 // Graph construction
 //
@@ -144,8 +148,25 @@ interface StudioStore {
 
 const clientRef: { current: ApiClient | null } = { current: null };
 
+/**
+ * Monotonic tokens used to discard the results of superseded async work.
+ *
+ * Graph fetches and agent executions are promises that write into shared state
+ * whenever they happen to resolve. Without a token, selecting agent A and then
+ * agent B leaves B's graph overwritten by A's slower topology response, and
+ * pressing Stop still appends the abandoned answer to the thread once the
+ * in-flight request lands. Each async entry point takes a token on the way in
+ * and only writes state back if it is still the current one.
+ */
+const graphRequestRef = { current: 0 };
+const executionRef = { current: 0 };
+
 function resetClient() {
   clientRef.current = null;
+  // Anything already in flight belongs to the previous server/config, so its
+  // result must never be applied.
+  graphRequestRef.current += 1;
+  executionRef.current += 1;
 }
 
 export const useStudioStore = create<StudioStore>()(
@@ -174,10 +195,26 @@ export const useStudioStore = create<StudioStore>()(
 
           await client.health();
 
+          // Only the health probe decides whether we are connected; the three
+          // catalogue calls are allowed to fail independently. They must not
+          // fail *silently* though: these were previously `.catch(() => [])`,
+          // so a server whose /agents endpoint was broken was indistinguishable
+          // from one with no agents configured — the studio just showed an
+          // empty agent list and said "Connected".
+          const failures: string[] = [];
+          const loadOrReport = async <T>(label: string, load: () => Promise<T>, fallback: T): Promise<T> => {
+            try {
+              return await load();
+            } catch (error) {
+              failures.push(`${label} (${describeError(error)})`);
+              return fallback;
+            }
+          };
+
           const [agents, tools, providers] = await Promise.all([
-            client.listAgents().catch(() => [] as AgentConfig[]),
-            client.listTools().catch(() => [] as string[]),
-            client.listProviders().catch(() => [] as ProviderInfo[]),
+            loadOrReport('agents', () => client.listAgents(), [] as AgentConfig[]),
+            loadOrReport('tools', () => client.listTools(), [] as string[]),
+            loadOrReport('providers', () => client.listProviders(), [] as ProviderInfo[]),
           ]);
 
           set({
@@ -185,11 +222,15 @@ export const useStudioStore = create<StudioStore>()(
             isConnecting: false,
             connectionStatus: 'connected',
             retryAttempts: 0,
-            error: undefined,
+            error: failures.length > 0 ? `Connected, but could not load ${failures.join(', ')}` : undefined,
             agents,
             tools,
             providers,
           });
+
+          failures.forEach((failure) =>
+            get().addExecutionLog({ level: 'warn', message: `Could not load ${failure}` }),
+          );
 
           if (agents.length > 0) {
             get().selectAgent(agents[0]);
@@ -199,7 +240,7 @@ export const useStudioStore = create<StudioStore>()(
             isConnected: false,
             isConnecting: false,
             connectionStatus: 'failed',
-            error: error instanceof Error ? error.message : String(error),
+            error: describeError(error),
           });
         }
       },
@@ -208,21 +249,37 @@ export const useStudioStore = create<StudioStore>()(
         resetClient();
         set({
           isConnected: false,
+          // Everything below describes the server we are walking away from.
+          // Leaving `lastExecution` and `currentGraphNode` behind made the
+          // debug view describe a run whose logs had just been cleared and the
+          // graph highlight point at a node that no longer existed, and a
+          // stuck `isExecuting` left the composer showing a Stop button.
+          isConnecting: false,
+          isExecuting: false,
           connectionStatus: 'disconnected',
+          retryAttempts: 0,
+          error: undefined,
           agents: [],
           selectedAgent: undefined,
           tools: [],
           providers: [],
           executionLogs: [],
+          lastExecution: undefined,
           graphNodes: [],
           graphEdges: [],
+          currentGraphNode: undefined,
         });
       },
 
       attemptReconnection: async () => {
         const { retryAttempts, maxRetryAttempts } = get();
         if (retryAttempts >= maxRetryAttempts) {
-          set({ connectionStatus: 'failed' });
+          // The Retry button stays on screen once the budget is spent, so say
+          // why pressing it does nothing rather than failing silently.
+          set({
+            connectionStatus: 'failed',
+            error: `Gave up after ${maxRetryAttempts} connection attempts. Check the server URL and that the GoLangGraph server is running, then reconnect from the setup screen.`,
+          });
           return;
         }
         set({ retryAttempts: retryAttempts + 1, connectionStatus: 'connecting' });
@@ -236,23 +293,48 @@ export const useStudioStore = create<StudioStore>()(
           const agents = await clientRef.current.listAgents();
           set({ agents });
         } catch (error) {
-          set({ error: error instanceof Error ? error.message : String(error) });
+          set({ error: describeError(error) });
         }
       },
 
       selectAgent: (agent) => {
-        set({ selectedAgent: agent });
-        if (agent) get().fetchGraphData(agent.id).catch(() => undefined);
+        // Clear the highlight up front: it names a node in the outgoing
+        // agent's graph and means nothing in the incoming one.
+        set({ selectedAgent: agent, currentGraphNode: undefined });
+        if (!agent) {
+          set({ graphNodes: [], graphEdges: [] });
+          return;
+        }
+        // Fire and forget, but report rather than discard: this used to be
+        // `.catch(() => undefined)`, which hid any graph failure completely.
+        get()
+          .fetchGraphData(agent.id)
+          .catch((error) =>
+            get().addExecutionLog({
+              level: 'warn',
+              message: `Could not build the graph for "${agent.name}": ${describeError(error)}`,
+            }),
+          );
       },
 
       fetchGraphData: async (agentId) => {
         const agent = get().agents.find((a) => a.id === agentId);
-        if (!agent) return;
+        if (!agent) {
+          // Nothing is known about this agent, so there is no graph to draw.
+          // Returning early used to leave the *previous* agent's graph on
+          // screen, silently attributing it to the new selection.
+          set({ graphNodes: [], graphEdges: [], currentGraphNode: undefined });
+          return;
+        }
+
+        const token = ++graphRequestRef.current;
+        const isCurrent = () => graphRequestRef.current === token;
 
         // Prefer the real topology when the server provides one.
         try {
           if (clientRef.current) {
             const topology = await clientRef.current.getGraphTopology(agentId);
+            if (!isCurrent()) return;
             const rawNodes = topology?.topology?.nodes ?? [];
             const rawEdges = topology?.topology?.edges ?? [];
             if (rawNodes.length > 0 || rawEdges.length > 0) {
@@ -269,6 +351,7 @@ export const useStudioStore = create<StudioStore>()(
                   source: String(e.from ?? e.source),
                   target: String(e.to ?? e.target),
                 })),
+                currentGraphNode: undefined,
               });
               return;
             }
@@ -277,6 +360,7 @@ export const useStudioStore = create<StudioStore>()(
           // Fall through to the type-derived graph.
         }
 
+        if (!isCurrent()) return;
         const { nodes, edges } = buildTypeGraph(agent);
         set({ graphNodes: nodes, graphEdges: edges, currentGraphNode: undefined });
       },
@@ -345,7 +429,15 @@ export const useStudioStore = create<StudioStore>()(
 
       clearLogs: () => set({ executionLogs: [], lastExecution: undefined }),
 
-      stopExecution: () => set({ isExecuting: false }),
+      stopExecution: () => {
+        // The API client exposes no cancellation, so the HTTP request itself
+        // runs to completion. Bumping the token makes `sendMessage` drop
+        // whatever comes back: without it, pressing Stop cleared the spinner
+        // but the abandoned answer still appeared in the thread seconds later.
+        executionRef.current += 1;
+        set({ isExecuting: false, currentGraphNode: undefined });
+        get().addExecutionLog({ level: 'warn', message: 'Execution stopped.' });
+      },
 
       sendMessage: async (content) => {
         const { config, selectedAgent, selectedThread } = get();
@@ -370,7 +462,10 @@ export const useStudioStore = create<StudioStore>()(
         };
         get().addMessage(thread.id, userMessage);
 
-        set({ isExecuting: true, currentGraphNode: 'input' });
+        const token = ++executionRef.current;
+        // `error` describes the most recent failure only — a new run must not
+        // be read against the previous run's message.
+        set({ isExecuting: true, currentGraphNode: 'input', error: undefined });
         get().addExecutionLog({ level: 'info', message: `Executing agent "${selectedAgent.name}"` });
 
         const markNode = (nodeId: string, status: GraphNode['status']) =>
@@ -389,10 +484,28 @@ export const useStudioStore = create<StudioStore>()(
           const execution = await client.executeAgent(selectedAgent.id, content);
           const wallMs = Date.now() - started;
 
+          // Superseded by Stop or by a newer run while we were waiting.
+          if (executionRef.current !== token) {
+            get().addExecutionLog({
+              level: 'warn',
+              message: 'Discarded the result of a stopped execution.',
+            });
+            return;
+          }
+
           set({ lastExecution: execution });
+
+          // A failed execution carries its reason in `error`. It was never
+          // read, so the log line said only "failed" and the assistant bubble
+          // said "No output returned." — the user was told nothing at all
+          // about why the run did not work.
+          const reason = execution.error?.trim();
+          const outcome = execution.success ? 'completed' : 'failed';
           get().addExecutionLog({
             level: execution.success ? 'info' : 'error',
-            message: `Execution ${execution.success ? 'completed' : 'failed'} in ${formatDuration(execution.duration)} (HTTP ${wallMs}ms)`,
+            message:
+              `Execution ${outcome} in ${formatDuration(execution.duration)} (HTTP ${wallMs}ms)` +
+              (!execution.success && reason ? `: ${reason}` : ''),
             data: execution,
           });
 
@@ -400,30 +513,57 @@ export const useStudioStore = create<StudioStore>()(
             get().addExecutionLog({ level: 'debug', message: `Tool call: ${call}` });
           }
 
-          // Reflect node statuses from the execution path when available.
+          // Reflect node statuses from the execution.
+          //
+          // `execution_path` names the nodes the server actually ran. Those ids
+          // only line up with the graph when the server returned a real
+          // topology — the type-derived fallback graph uses its own ids — so
+          // when none of them match we fall back to marking the whole graph.
+          // Either way a failed run must not be painted green, which is what
+          // the previous unconditional `markNode(id, 'completed')` did: the
+          // `error` node status existed but was never produced.
           const path = execution.execution_path ?? [];
           const nodes = get().graphNodes;
-          nodes.forEach((node) => markNode(node.id, 'completed'));
-          if (path.length > 0) {
-            path.forEach((id) => markNode(id, 'completed'));
+          const visited = path.filter((id) => nodes.some((n) => n.id === id));
+          const finalStatus: GraphNode['status'] = execution.success ? 'completed' : 'error';
+
+          if (visited.length > 0) {
+            const lastVisited = visited[visited.length - 1];
+            nodes.forEach((node) =>
+              markNode(node.id, visited.indexOf(node.id) >= 0 ? 'completed' : 'idle'),
+            );
+            markNode(lastVisited, finalStatus);
+            set({ currentGraphNode: lastVisited });
+          } else {
+            nodes.forEach((node) => markNode(node.id, finalStatus));
+            set({ currentGraphNode: nodes[nodes.length - 1]?.id });
           }
-          set({ currentGraphNode: path[path.length - 1] ?? nodes[nodes.length - 1]?.id });
 
           const text = extractOutputText(execution.output);
           const assistantMessage: Message = {
             id: uid('msg'),
             role: 'assistant',
-            content: text || 'No output returned.',
+            content:
+              text ||
+              (execution.success
+                ? 'No output returned.'
+                : `❌ Execution failed: ${reason || 'the server did not report a reason.'}`),
             timestamp: new Date(),
             metadata: {
               duration_ns: execution.duration,
-              status: execution.success ? 'completed' : 'failed',
+              status: outcome,
               tool_calls: execution.tool_calls?.length ?? 0,
+              ...(reason ? { error: reason } : {}),
             },
           };
           get().addMessage(thread.id, assistantMessage);
+
+          if (!execution.success) {
+            set({ error: reason || 'The execution failed without a reported reason.' });
+          }
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          if (executionRef.current !== token) return;
+          const message = describeError(error);
           get().addExecutionLog({ level: 'error', message: `Execution failed: ${message}` });
           const errorMessage: Message = {
             id: uid('msg'),
@@ -432,9 +572,13 @@ export const useStudioStore = create<StudioStore>()(
             timestamp: new Date(),
           };
           get().addMessage(thread.id, errorMessage);
-          set({ error: message });
+          set({ error: message, currentGraphNode: undefined });
         } finally {
-          set({ isExecuting: false, currentGraphNode: undefined });
+          // Only the run that is still current owns these flags, and the
+          // `currentGraphNode` set above must survive: clearing it here threw
+          // away the highlight identifying where the run ended, making that
+          // whole computation dead code.
+          if (executionRef.current === token) set({ isExecuting: false });
         }
       },
 

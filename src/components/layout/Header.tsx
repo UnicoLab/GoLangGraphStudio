@@ -28,6 +28,15 @@ const typeStyles: Record<AgentType, string> = {
   tool: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
 };
 
+/**
+ * `AgentConfig.type` is whatever string the Go server put in the config; the
+ * union is our narrowing, not a guarantee. Indexing the map directly emitted a
+ * literal `class="… undefined"` for any type the studio does not know about,
+ * so unknown types get a neutral badge instead.
+ */
+const typeStyle = (type: string) =>
+  typeStyles[type as AgentType] ?? 'bg-gray-500/15 text-gray-500 border-gray-500/30';
+
 export const Header: React.FC = () => {
   const {
     agents,
@@ -98,7 +107,7 @@ export const Header: React.FC = () => {
           }`}
         >
           {selectedAgent && (
-            <span className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold uppercase tracking-wide ${typeStyles[selectedAgent.type]}`}>
+            <span className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold uppercase tracking-wide ${typeStyle(selectedAgent.type)}`}>
               {selectedAgent.type}
             </span>
           )}
@@ -204,7 +213,7 @@ const AgentRow: React.FC<{
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
         <span className={`text-sm font-medium truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>{agent.name}</span>
-        <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-semibold uppercase ${typeStyles[agent.type]}`}>
+        <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-semibold uppercase ${typeStyle(agent.type)}`}>
           {agent.type}
         </span>
       </div>
