@@ -1,7 +1,7 @@
 # GoLangGraph Studio
 
 <div align="center">
-  <img src="../public/imgs/main_screen_ok.png" alt="GoLangGraph Studio Main Interface" width="800"/>
+  <img src="https://raw.githubusercontent.com/UnicoLab/GoLangGraphStudio/main/public/imgs/main_screen_ok.png" alt="GoLangGraph Studio Main Interface" width="800"/>
   <p><em>GoLangGraph Studio - A comprehensive development environment for GoLangGraph applications</em></p>
 </div>
 
@@ -13,7 +13,7 @@ A fully functional React interface for debugging and testing GoLangGraph agents,
 
 ### 🔗 Interactive Graph View
 <div align="center">
-  <img src="../public/imgs/graph_view.png" alt="Graph View Interface" width="600"/>
+  <img src="https://raw.githubusercontent.com/UnicoLab/GoLangGraphStudio/main/public/imgs/graph_view.png" alt="Graph View Interface" width="600"/>
   <p><em>Visual representation of your GoLangGraph execution flow</em></p>
 </div>
 

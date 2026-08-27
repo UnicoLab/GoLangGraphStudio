@@ -52,7 +52,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          mkdocs build --verbose --clean
+          mkdocs build --strict --verbose --clean
 
       - name: Setup Pages
         uses: actions/configure-pages@v3

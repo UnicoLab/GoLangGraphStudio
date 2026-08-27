@@ -55,7 +55,7 @@ The application will be available at `http://localhost:5173`.
 
 When you first open GoLangGraph Studio, you'll see the connection setup screen:
 
-![Connection Setup](../../public/imgs/main_screen.png)
+![Connection Setup](https://raw.githubusercontent.com/UnicoLab/GoLangGraphStudio/main/public/imgs/main_screen.png)
 
 Configure the following:
 
@@ -101,9 +101,7 @@ Once connected, you can:
 
 ## Next Steps
 
-- Explore [Features](../features/graph-view.md) to learn about all capabilities
-- Read the [User Guide](../guide/basic-usage.md) for detailed usage instructions
-- Check out [Examples](../examples/basic-setup.md) for common use cases
+- Explore the [Graph View](../features/graph-view.md) to learn about the execution visualisation
 
 ## Troubleshooting
 
@@ -118,4 +116,4 @@ Once connected, you can:
 **UI Not Loading**
 : Clear your browser cache and refresh the page.
 
-For more troubleshooting tips, see the [Troubleshooting Guide](../guide/troubleshooting.md).
+For more troubleshooting help, check the repository's GitHub issues.

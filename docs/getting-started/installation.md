@@ -246,9 +246,9 @@ npm install
 After successful installation:
 
 1. Follow the [Quick Start Guide](quick-start.md)
-2. Configure your [GoLangGraph Connection](configuration.md)
-3. Explore the [Features](../features/graph-view.md)
+2. Configure your GoLangGraph connection in the Studio setup screen
+3. Explore the [Graph View](../features/graph-view.md)
 
 ## Troubleshooting
 
-For installation issues, see our [Troubleshooting Guide](../guide/troubleshooting.md) or check the [GitHub Issues](https://github.com/UnicoLab/GoLangGraphStudio/issues).
+For installation issues, check the [GitHub Issues](https://github.com/UnicoLab/GoLangGraphStudio/issues).

@@ -2,7 +2,7 @@
 
 The Graph View is one of the core features of GoLangGraph Studio, providing a visual representation of your agent's execution flow in real-time.
 
-![Graph View Interface](../../public/imgs/graph_view.png)
+![Graph View Interface](https://raw.githubusercontent.com/UnicoLab/GoLangGraphStudio/main/public/imgs/graph_view.png)
 
 ## Overview
 
@@ -190,7 +190,7 @@ Bottom panel showing real-time execution logs:
 
 ### Debug Mode Integration
 
-The Graph View integrates seamlessly with [Debug Mode](debug-view.md):
+The Graph View complements Studio's Debug view:
 
 - **Synchronized State**: State changes reflect in both views
 - **Cross-Navigation**: Click logs to highlight nodes
@@ -198,6 +198,6 @@ The Graph View integrates seamlessly with [Debug Mode](debug-view.md):
 
 ## Related Features
 
-- [Debug View](debug-view.md) - Detailed execution analysis
-- [Chat Mode](chat-mode.md) - Conversational interface
-- [Agent Management](agent-management.md) - Configure agents 
+- Debug view - Detailed execution analysis
+- Chat view - Conversational interface
+- Agent selection in the Studio header - Configure agents
